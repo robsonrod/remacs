@@ -1,0 +1,7 @@
+set(NAME libname)
+
+file(GLOB SRCS "*.cpp" "*.c")
+
+add_library(${NAME} ${SRCS})
+
+target_link_libraries(${NAME})

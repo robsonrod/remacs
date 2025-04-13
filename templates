@@ -1,0 +1,23 @@
+;; -*- mode: emacs-lisp -*-
+
+fundamental-mode ;; Available everywhere
+
+(today (format-time-string "%Y-%m-%d"))
+(mmsh "# -*- mode: sh -*-")
+(mmel "# -*- mode: emacs-lisp -*-")
+
+prog-mode
+
+(fixme (if (derived-mode-p 'emacs-lisp-mode) ";; " comment-start) "FIXME ")
+(todo (if (derived-mode-p 'emacs-lisp-mode) ";; " comment-start) "TODO ")
+(bug (if (derived-mode-p 'emacs-lisp-mode) ";; " comment-start) "BUG ")
+(hack (if (derived-mode-p 'emacs-lisp-mode) ";; " comment-start) "HACK ")
+
+c++-mode
+
+(class "class " (p (file-name-base (or (buffer-file-name) (buffer-name)))) " {" n> r> n "}")
+
+c++-mode :when (re-search-backward "^\\S-*$" (line-beginning-position) 'noerror)
+
+(inc "#include <" (p (concat (file-name-base (or (buffer-file-name) (buffer-name))) ".h")) ">")
+(incc "#include \"" (p (concat (file-name-base (or (buffer-file-name) (buffer-name))) ".h")) "\"")
