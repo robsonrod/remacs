@@ -886,6 +886,22 @@ The DWIM behaviour of this command is as follows:
     (hl-line-mode -1)
     (display-line-numbers-mode -1))))
 
+(use-package vterm-toggle
+  :after vterm
+  :config
+(setq vterm-toggle-fullscreen-p nil)
+(add-to-list 'display-buffer-alist
+             '((lambda (buffer-or-name _)
+                   (let ((buffer (get-buffer buffer-or-name)))
+                     (with-current-buffer buffer
+                       (or (equal major-mode 'vterm-mode)
+                           (string-prefix-p vterm-buffer-name (buffer-name buffer))))))
+               (display-buffer-reuse-window display-buffer-in-side-window)
+               (side . right)
+               (dedicated . t) ;dedicated is supported in emacs27
+               (reusable-frames . visible)
+               (window-width . 0.5))))
+
 ;; eat
 (use-package eat
   :custom
@@ -1509,5 +1525,11 @@ Position the cursor at its beginning, according to the current mode."
   "K" '(remacs/delete-file-and-buffer :which-key "delete file and buffer")
   "R" '(rename-visited-file :which-key "rename visited file")
   "i" '(auto-insert :which-key "auto insert content from template"))
+
+(remacs/major-mode-leader-map
+  "t" '(vterm-toggle :which-key "terminal")
+  "r" '(ielm :which-key "emacs REPL")
+  )
+
 
 ;;; init.el ends here
