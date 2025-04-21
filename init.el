@@ -1188,12 +1188,17 @@ The DWIM behaviour of this command is as follows:
   pdf-tools 
   :magic ("%PDF" . pdf-view-mode)
   :bind (:map pdf-view-mode-map
+              ("h"   . pdf-annot-add-highlight-markup-annotation)
+              ("t"   . pdf-annot-add-text-annotation)
+              ("D"   . pdf-annot-delete)
               ("C-s" . isearch-forward)
               ("C-g" . pdf-view-goto-page))
   :ensure t 
   :config
   (pdf-tools-install :no-query) 
   (setq-default pdf-view-display-size 'fit-page)
+  (setq pdf-view-resize-factor 1.1)
+  (add-hook 'pdf-view-mode-hook (lambda () (cua-mode 0)))
   (add-hook 'pdf-view-mode-hook (lambda () (remacs/pdf-midnight))))
 
 (use-package
