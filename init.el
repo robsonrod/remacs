@@ -496,12 +496,19 @@ The DWIM behaviour of this command is as follows:
  :init (with-eval-after-load 'dired (require 'dired-x))
  :commands (dired dired-jump)
  :hook
- ((dired-mode . dired-hide-details-mode) (dired-mode . hl-line-mode))
+ ((dired-mode . dired-hide-details-mode)
+  (dired-mode . hl-line-mode)
+  (dired-mode . dired-omit-mode))
+ :bind
+ (:map dired-mode-map ("b" . dired-up-directory))
+ (:map dired-mode-map ("." . dired-omit-mode))
  :config
+ (setq dired-listing-switches "-goah --group-directories-first --time-style=long-iso")
  (setq dired-recursive-copies 'always)
  (setq dired-recursive-deletes 'always)
  (setq delete-by-moving-to-trash t)
  (setq dired-dwim-target t)
+ (setq dired-omit-files (rx (seq bol "."))) ;; Omit dot files
  (put 'dired-find-alternate-file 'disabled nil))
 
 (use-package
@@ -578,7 +585,6 @@ The DWIM behaviour of this command is as follows:
  git-gutter
  :hook (prog-mode . git-gutter-mode)
  :config (setq git-gutter:update-interval 0.02))
-
 
 ;; Modeline and themes
 (use-package minions :config (minions-mode 1))
@@ -1202,9 +1208,17 @@ The DWIM behaviour of this command is as follows:
 (use-package
   nov
   :ensure t
+  :hook
+  (nov-mode . (lambda ()
+    (hl-line-mode -1)
+    (display-line-numbers-mode -1)))
   :config
   (setq nov-unzip-program (executable-find "bsdtar")
-        nov-unzip-args '("-xC" directory "-f" filename))
+        nov-unzip-args '("-xC" directory "-f" filename)
+        nov-text-width t
+        visual-fill-column-center-text t)
+  (add-hook 'nov-mode-hook 'visual-line-mode)
+  (add-hook 'nov-mode-hook 'visual-fill-column-mode)
   (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode)))
 
 (setq auto-insert-directory (expand-file-name "auto-insert/" user-emacs-directory))
