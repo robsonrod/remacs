@@ -434,7 +434,7 @@ The DWIM behaviour of this command is as follows:
 (use-package
   avy
   :config
-  (global-set-key (kbd "H-;") #'avy-goto-char)
+  (global-set-key (kbd "s-;") #'avy-goto-char)
   (global-set-key (kbd "M-g w") #'avy-goto-word-1)
   (global-set-key (kbd "C-c C-j") 'avy-resume)) 
 
@@ -539,8 +539,8 @@ The DWIM behaviour of this command is as follows:
  perspective
  :demand t
  :bind
- (("H-c p" . persp-switch)
-  ("H-c n" . persp-next)
+ (("s-c p" . persp-switch)
+  ("s-c n" . persp-next)
   ("C-x k" . persp-kill-buffer*))
  :custom
  (persp-initial-frame-name "Main")
@@ -801,7 +801,7 @@ The DWIM behaviour of this command is as follows:
 (use-package clipetty
   :ensure t
   :hook (after-init . global-clipetty-mode)
-  :bind ("H-w" . clipetty-kill-ring-save))
+  :bind ("M-w" . clipetty-kill-ring-save))
 
 ;; python
 (use-package
@@ -1042,6 +1042,10 @@ The DWIM behaviour of this command is as follows:
   sxhkdrc-mode
   :ensure t)
 
+(use-package
+  whole-line-or-region
+  :hook(after-init . whole-line-or-region-global-mode))
+
 ;; Orgmode
 (defun efs/org-mode-setup ()
   (org-indent-mode)
@@ -1174,7 +1178,7 @@ The DWIM behaviour of this command is as follows:
  :config
  (general-create-definer
   remacs/major-mode-leader-map
-  :prefix "H-x")
+  :prefix "s-x")
  (general-create-definer remacs/ctrl-c-definer :prefix "C-c"))
 
 (use-package
@@ -1184,22 +1188,11 @@ The DWIM behaviour of this command is as follows:
   :config (setq deft-directory "~/Dropbox/Notes"
                 deft-extensions '("md" "org" "txt" "tex")))
 
-(use-package 
-  pdf-tools 
-  :magic ("%PDF" . pdf-view-mode)
-  :bind (:map pdf-view-mode-map
-              ("h"   . pdf-annot-add-highlight-markup-annotation)
-              ("t"   . pdf-annot-add-text-annotation)
-              ("D"   . pdf-annot-delete)
-              ("C-s" . isearch-forward)
-              ("C-g" . pdf-view-goto-page))
-  :ensure t 
-  :config
-  (pdf-tools-install :no-query) 
-  (setq-default pdf-view-display-size 'fit-page)
-  (setq pdf-view-resize-factor 1.1)
-  (add-hook 'pdf-view-mode-hook (lambda () (cua-mode 0)))
-  (add-hook 'pdf-view-mode-hook (lambda () (remacs/pdf-midnight))))
+(use-package doc-view
+    :custom
+    (doc-view-resolution 300)
+    (doc-view-mupdf-use-svg t)
+    (large-file-warning-threshold (* 50 (expt 2 20))))
 
 (use-package
   transmission
@@ -1274,14 +1267,6 @@ Position the cursor at its beginning, according to the current mode."
   (interactive)
   (move-end-of-line nil)
   (newline-and-indent))
-
-(defun remacs/kill-line ()
-  "Kill the whole current line.
-Position the cursor at its beginning, according to the current mode."
-  (interactive)
-  (move-beginning-of-line nil)
-  (kill-line)
-  (kill-line))
 
 (defun remacs/open-config ()
   "Open Emacs config file."
@@ -1499,6 +1484,15 @@ Position the cursor at its beginning, according to the current mode."
     (insert "\ncurl command: " upload-command)
     (read-only-mode)))
 
+(defun remacs/kill-to-next-whitespace ()
+  "Kill characters from point to the next whitespace."
+  (interactive)
+  (let ((end (save-excursion
+               (re-search-forward "[ \t\n]" nil t))))
+    (if end
+        (kill-region (point) end)
+      (message "No whitespace found."))))
+
 ;; Remap
 (global-set-key (kbd "M-o") #'other-window)
 (global-set-key (kbd "M-i") #'remacs/other-window-backward)
@@ -1508,7 +1502,7 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "M-<right>") #'enlarge-window-horizontally)
 (global-set-key (kbd "M-<left>") #'shrink-window-horizontally)
 
-(global-set-key (kbd "C-c k") #'remacs/kill-line)
+(global-set-key (kbd "C-c k") #'remacs/kill-to-next-whitespace)
 (global-set-key (kbd "C-c c") #'remacs/insert-comment)
 
 (global-set-key [(control shift return)] #'remacs/smart-open-line-above)
