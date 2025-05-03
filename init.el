@@ -682,7 +682,8 @@ The DWIM behaviour of this command is as follows:
  (lsp-ui-sideline-enable t)
  (lsp-ui-sideline-show-hover nil)
  (lsp-ui-doc-position 'bottom)
- (lsp-ui-doc-show)
+ (lsp-ui-doc-enable t)
+ (lsp-ui-doc-show t)
  :bind (:map lsp-ui-mode-map ("C-c i" . lsp-ui-menu)))
 
 (use-package consult-lsp :init :defer t :after lsp)
