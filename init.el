@@ -630,6 +630,10 @@ The DWIM behaviour of this command is as follows:
  :commands (lsp lsp-deferred)
  :bind (:map lsp-mode-map ("M-<RET>" . lsp-execute-action))
  :custom
+ (lsp-keymap-prefix "C-c l")
+ (lsp-enable-xref t)
+ (lsp-idle-xref 0.5)
+ (lsp-session-file (expand-file-name ".lsp-session" user-emacs-directory))
  (lsp-auto-guess-root nil)
  (lsp-prefer-flymake nil) ; Use flycheck instead of flymake
  (lsp-enable-file-watchers nil)
@@ -637,32 +641,34 @@ The DWIM behaviour of this command is as follows:
  (read-process-output-max (* 1024 1024))
  (lsp-keep-workspace-alive nil)
  (lsp-eldoc-hook nil)
+ (lsp-clients-clangd-executable "clangd")
+ (lsp-clients-clangd-args '("--compile-commands-dir=build"))
+ (lsp-file-watch-threshold 15000)
+ (lsp-ui-doc-enable nil)
+ (lsp-ui-doc-show-with-cursor nil)
+ (lsp-modeline-code-actions-enable nil)
+ (lsp-signature-render-documentation nil)
+ (lsp-lens-enable nil)
+ (lsp-enable-symbol-highlighting nil)
+ (lsp-eldoc-enable-hover nil)
+ (lsp-eldoc-hook nil)
+ (lsp-enable-links nil)
+ (lsp-log-io nil)
+ (lsp-enable-file-watchers nil)
+ (lsp-enable-on-type-formatting nil)
+ (lsp-completion-show-detail nil)
+ (lsp-completion-show-kind nil)
+ (lsp-headerline-breadcrumb-enable nil)
  :hook
  ((c-mode . lsp-deferred)
   (c++-mode . lsp-deferred)
   (clojure-mode . lsp-deferred)
   (rust-mode . lsp-deferred)
-  (lsp-mode . lsp-enable-which-key-integration))
- :config
- (setq lsp-keymap-prefix "C-c l")
- (define-key lsp-mode-map (kbd "C-c l") lsp-command-map)
- (setq lsp-clients-clangd-executable "/usr/bin/clangd")
- (setq lsp-file-watch-threshold 15000)
- (setq lsp-ui-doc-enable nil)
- (setq lsp-ui-doc-show-with-cursor nil)
- (setq lsp-modeline-code-actions-enable nil)
- (setq lsp-signature-render-documentation nil)
- (setq lsp-lens-enable nil)
- (setq lsp-enable-symbol-highlighting nil)
- (setq lsp-eldoc-enable-hover nil)
- (setq lsp-eldoc-hook nil)
- (setq lsp-enable-links nil)
- (setq lsp-log-io nil)
- (setq lsp-enable-file-watchers nil)
- (setq lsp-enable-on-type-formatting nil)
- (setq lsp-completion-show-detail nil)
- (setq lsp-completion-show-kind nil)
- (setq lsp-headerline-breadcrumb-enable nil))
+  (lsp-mode . lsp-enable-which-key-integration)
+  (rust-ts-mode . lsp-deferred))
+ ;;:config
+ ;;(define-key lsp-mode-map (kbd "C-c l") lsp-command-map)
+ )
 
 ;; a hight level UI modules of lsp
 (use-package
@@ -672,10 +678,10 @@ The DWIM behaviour of this command is as follows:
  :defer t
  :after lsp
  :hook (lsp-mode . lsp-ui-mode)
- :config
- (setq lsp-ui-sideline-enable t)
- (setq lsp-ui-sideline-show-hover nil)
- (setq lsp-ui-doc-position 'bottom)
+ :custom
+ (lsp-ui-sideline-enable t)
+ (lsp-ui-sideline-show-hover nil)
+ (lsp-ui-doc-position 'bottom)
  (lsp-ui-doc-show)
  :bind (:map lsp-ui-mode-map ("C-c i" . lsp-ui-menu)))
 
@@ -687,6 +693,7 @@ The DWIM behaviour of this command is as follows:
  :ensure t
  :config
  :hook
+ :disabled
  ((c-mode c++-mode objc-mode cuda-mode)
   .
   (lambda ()
@@ -713,10 +720,16 @@ The DWIM behaviour of this command is as follows:
 (use-package
  rust-mode
  :defer t
+ :init
+ (setq rust-mode-treesitter-derive t)
  :mode "\\.rs\\'"
  :custom
  (rust-format-on-save t)
  (lsp-rust-server 'rust-analyzer))
+
+(use-package cargo
+  :ensure t
+  :hook (rust-mode . cargo-minor-mode))
 
 ;;; markdown
 (use-package
@@ -772,14 +785,14 @@ The DWIM behaviour of this command is as follows:
 
 ;; toml
 (use-package
- toml-mode
+ toml-ts-mode
  :init
  :defer t
  :mode "/\\(Cargo.lock\\|\\.cargo/config\\)\\'")
 
 ;; yaml
 (use-package
- yaml-mode
+ yaml-ts-mode
  :defer t
  :init
  :mode "\\.yml\\'"
@@ -790,13 +803,14 @@ The DWIM behaviour of this command is as follows:
   :bind ("C-c d" . docker))
 
 (use-package
-  dockerfile-mode
+  dockerfile-ts-mode
   :defer t
-  :ensure t)
+  :mode (("\\Dockerfile\\'" . dockerfile-ts-mode)
+         ("\\.dockerignore\\'" . dockerfile-ts-mode)))
 
 (use-package
-  cmake-mode
- :hook (cmake-mode . lsp-deferred))
+  cmake-ts-mode
+ :hook (cmake-ts-mode . lsp-deferred))
 
 (use-package clipetty
   :ensure t
@@ -805,9 +819,9 @@ The DWIM behaviour of this command is as follows:
 
 ;; python
 (use-package
- python-mode
+ python-ts-mode
  :ensure t
- :hook (python-mode . lsp-deferred)
+ :hook (python-ts-mode . lsp-deferred)
  :custom (python-shell-interpreter "python"))
 
 ;; pyenv
@@ -1240,16 +1254,50 @@ The DWIM behaviour of this command is as follows:
           ("Asia/Calcutta" "Bangalore")
           ("Asia/Tokyo" "Tokyo"))))
 
-(defun remacs/pdf-midnight ()
-  "Set pdf-view-midnight colors"
-  (interactive)
-  (setq pdf-view-midnight-colors '("#c8d3f5" . "#191a2a"))
-  (pdf-view-midnight-minor-mode))
+(use-package treesit
+  :ensure nil
+  :init
+  (setq treesit-language-source-alist
+        '((bash "https://github.com/tree-sitter/tree-sitter-bash")
+          (c "https://github.com/tree-sitter/tree-sitter-c")
+          (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
+          (cmake "https://github.com/uyha/tree-sitter-cmake")
+          (elisp "https://github.com/Wilfred/tree-sitter-elisp")
+          (python "https://github.com/tree-sitter/tree-sitter-python")
+          (javascript "https://github.com/tree-sitter/tree-sitter-javascript")
+          (json "https://github.com/tree-sitter/tree-sitter-json")
+          (html "https://github.com/tree-sitter/tree-sitter-html")
+          (css "https://github.com/tree-sitter/tree-sitter-css")
+          (go "https://github.com/tree-sitter/tree-sitter-go")
+          (yaml "https://github.com/ikatyang/tree-sitter-yaml")
+          (toml "https://github.com/tree-sitter/tree-sitter-toml")
+          (rust "https://github.com/tree-sitter/tree-sitter-rust")))
+  :hook ((bash-ts-mode c-ts-mode c++-ts-mode
+          html-ts-mode js-ts-mode typescript-ts-mode
+          json-ts-mode rust-ts-mode tsx-ts-mode python-ts-mode
+          css-ts-mode yaml-ts-mode) . lsp-deferred)
+  :config
+  ;; Auto-install missing parsers
+  (dolist (lang (mapcar #'car treesit-language-source-alist))
+    (unless (treesit-language-available-p lang)
+      (treesit-install-language-grammar lang)))
 
-(defun remacs/pdf-clear ()
-  "Set pdf-view without colors"
-  (interactive)
-  (pdf-view-midnight-minor-mode -1))
+  ;; Remap traditional modes to Tree-sitter ones
+  (setq major-mode-remap-alist
+        '((bash-mode . bash-ts-mode)
+          (sh-mode . bash-ts-mode)
+          (c-mode . c-ts-mode)
+          (c++-mode . c++-ts-mode)
+          (cmake-mode . cmake-ts-mode)
+          (python-mode . python-ts-mode)
+          (js-mode . js-ts-mode)
+          (json-mode . json-ts-mode)
+          (html-mode . html-ts-mode)
+          (css-mode . css-ts-mode)
+          (go-mode . go-ts-mode)
+          (toml-mode . toml-ts-mode)
+          (rust-mode . rust-ts-mode))
+        treesit-font-lock-level 3))
 
 ;;; My functions
 (defun remacs/smart-open-line-above ()
