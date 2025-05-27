@@ -194,6 +194,79 @@
   (unless (server-running-p)
     (server-start)))
 
+(defvar remacs/exwm-running
+  (cond ((and (memq window-system '(x))
+              (seq-contains-p command-line-args "--use-exwm")
+              :true))
+        (t :false)))
+
+
+(when (eq remacs/exwm-running :true)
+  (menu-bar-mode -1)
+
+(defun efs/exwm-update-class ()
+  (exwm-workspace-rename-buffer exwm-class-name))
+
+(use-package app-launcher
+  :vc (:url "https://github.com/SebastienWae/app-launcher"
+       :branch "main")
+  :ensure t
+  :commands (app-launcher-run-app))
+
+(use-package
+  exwm
+  :config
+  (setq exwm-workspace-number 5)
+    ;; When window "class" updates, use it to set the buffer name
+  (add-hook 'exwm-update-class-hook #'efs/exwm-update-class)
+
+  ;; These keys should always pass through to Emacs
+  (setq exwm-input-prefix-keys
+    '(?\C-x
+      ?\C-u
+      ?\C-h
+      ?\M-x
+      ?\M-`
+      ?\M-&
+      ?\M-:
+      ?\C-\M-j  ;; Buffer list
+      ?\C-\ ))  ;; Ctrl+Space
+
+  ;; Ctrl+Q will enable the next key to be sent directly
+  (define-key exwm-mode-map [?\C-q] 'exwm-input-send-next-key)
+
+  ;; Set up global key bindings.  These always work, no matter the input state!
+  ;; Keep in mind that changing this list after EXWM initializes has no effect.
+  (setq exwm-input-global-keys
+        `(
+          ;; Reset to line-mode (C-c C-k switches to char-mode via exwm-input-release-keyboard)
+          ([?\s-r] . exwm-reset)
+
+          ;; Move between windows
+          ([s-left] . windmove-left)
+          ([s-right] . windmove-right)
+          ([s-up] . windmove-up)
+          ([s-down] . windmove-down)
+
+          ;; Launch applications via shell command
+          ([?\s-&] . (lambda (command)
+                       (interactive (list (read-shell-command "$ ")))
+                       (start-process-shell-command command nil command)))
+
+          ;; Switch workspace
+          ([?\s-w] . exwm-workspace-switch)
+
+          ;; 's-N': Switch to certain workspace with Super (Win) plus a number key (0 - 9)
+          ,@(mapcar (lambda (i)
+                      `(,(kbd (format "s-%d" i)) .
+                        (lambda ()
+                          (interactive)
+                          (exwm-workspace-switch-create ,i))))
+                    (number-sequence 0 9))))
+  (exwm-enable))
+
+(message "Starting EXWM"))
+
 (use-package
  delsel
  :ensure nil
@@ -436,7 +509,7 @@ The DWIM behaviour of this command is as follows:
   :config
   (global-set-key (kbd "s-;") #'avy-goto-char)
   (global-set-key (kbd "M-g w") #'avy-goto-word-1)
-  (global-set-key (kbd "C-c C-j") 'avy-resume)) 
+  (global-set-key (kbd "C-c C-j") 'avy-resume))
 
 ;;; Helpers
 (use-package
@@ -598,6 +671,10 @@ The DWIM behaviour of this command is as follows:
   doom-themes-enable-italic t)
  ;;(load-theme 'doom-dracula t)
  (doom-themes-org-config) (doom-themes-neotree-config))
+
+(use-package doom-modeline
+  :ensure t
+  :hook (after-init . doom-modeline-mode))
 
 ;; Undo/redo framework
 (use-package
@@ -890,9 +967,9 @@ The DWIM behaviour of this command is as follows:
   (sh-mode . (lambda () (shfmt-on-save-mode))))
 
 ;;Terminals
-(use-package 
-  exec-path-from-shell 
-  :if (memq window-system '(mac ns x)) 
+(use-package
+  exec-path-from-shell
+  :if (memq window-system '(mac ns x))
   :config (exec-path-from-shell-initialize))
 
 (use-package ielm
@@ -1263,12 +1340,8 @@ The DWIM behaviour of this command is as follows:
           (c "https://github.com/tree-sitter/tree-sitter-c")
           (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
           (cmake "https://github.com/uyha/tree-sitter-cmake")
-          (elisp "https://github.com/Wilfred/tree-sitter-elisp")
           (python "https://github.com/tree-sitter/tree-sitter-python")
-          (javascript "https://github.com/tree-sitter/tree-sitter-javascript")
           (json "https://github.com/tree-sitter/tree-sitter-json")
-          (html "https://github.com/tree-sitter/tree-sitter-html")
-          (css "https://github.com/tree-sitter/tree-sitter-css")
           (go "https://github.com/tree-sitter/tree-sitter-go")
           (yaml "https://github.com/ikatyang/tree-sitter-yaml")
           (toml "https://github.com/tree-sitter/tree-sitter-toml")
