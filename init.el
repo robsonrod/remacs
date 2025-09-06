@@ -194,79 +194,6 @@
   (unless (server-running-p)
     (server-start)))
 
-(defvar remacs/exwm-running
-  (cond ((and (memq window-system '(x))
-              (seq-contains-p command-line-args "--use-exwm")
-              :true))
-        (t :false)))
-
-
-(when (eq remacs/exwm-running :true)
-  (menu-bar-mode -1)
-
-(defun efs/exwm-update-class ()
-  (exwm-workspace-rename-buffer exwm-class-name))
-
-(use-package app-launcher
-  :vc (:url "https://github.com/SebastienWae/app-launcher"
-       :branch "main")
-  :ensure t
-  :commands (app-launcher-run-app))
-
-(use-package
-  exwm
-  :config
-  (setq exwm-workspace-number 5)
-    ;; When window "class" updates, use it to set the buffer name
-  (add-hook 'exwm-update-class-hook #'efs/exwm-update-class)
-
-  ;; These keys should always pass through to Emacs
-  (setq exwm-input-prefix-keys
-    '(?\C-x
-      ?\C-u
-      ?\C-h
-      ?\M-x
-      ?\M-`
-      ?\M-&
-      ?\M-:
-      ?\C-\M-j  ;; Buffer list
-      ?\C-\ ))  ;; Ctrl+Space
-
-  ;; Ctrl+Q will enable the next key to be sent directly
-  (define-key exwm-mode-map [?\C-q] 'exwm-input-send-next-key)
-
-  ;; Set up global key bindings.  These always work, no matter the input state!
-  ;; Keep in mind that changing this list after EXWM initializes has no effect.
-  (setq exwm-input-global-keys
-        `(
-          ;; Reset to line-mode (C-c C-k switches to char-mode via exwm-input-release-keyboard)
-          ([?\s-r] . exwm-reset)
-
-          ;; Move between windows
-          ([s-left] . windmove-left)
-          ([s-right] . windmove-right)
-          ([s-up] . windmove-up)
-          ([s-down] . windmove-down)
-
-          ;; Launch applications via shell command
-          ([?\s-&] . (lambda (command)
-                       (interactive (list (read-shell-command "$ ")))
-                       (start-process-shell-command command nil command)))
-
-          ;; Switch workspace
-          ([?\s-w] . exwm-workspace-switch)
-
-          ;; 's-N': Switch to certain workspace with Super (Win) plus a number key (0 - 9)
-          ,@(mapcar (lambda (i)
-                      `(,(kbd (format "s-%d" i)) .
-                        (lambda ()
-                          (interactive)
-                          (exwm-workspace-switch-create ,i))))
-                    (number-sequence 0 9))))
-  (exwm-enable))
-
-(message "Starting EXWM"))
-
 (use-package
  delsel
  :ensure nil
@@ -371,6 +298,26 @@ The DWIM behaviour of this command is as follows:
     (border-mode-line-inactive "#303446")))
  :config (load-theme 'modus-vivendi-tinted :no-confirm-loading))
 
+;; modeline icons
+(use-package 
+  minions 
+  :hook (doom-modeline-mode . minions-mode))
+
+;; doom modeline
+(use-package 
+  doom-modeline 
+  :ensure t 
+  :init (doom-modeline-mode 1) 
+  :custom ((doom-modeline-height 15) 
+           (doom-modeline-bar-width 6) 
+           (doom-modeline-lsp t) 
+           (doom-modeline-persp-name nil) 
+           (doom-modeline-irc nil) 
+           (doom-modeline-mu4e nil) 
+           (doom-modeline-minor-modes t) 
+           (doom-modeline-buffer-file-name-style 'truncate-except-project) 
+           (doom-modeline-major-mode-icon t)))
+
 ;; Remember to do M-x and run `nerd-icons-install-fonts' to get the
 ;; font files.  Then restart Emacs to see the effect.
 (use-package nerd-icons :ensure t)
@@ -450,7 +397,8 @@ The DWIM behaviour of this command is as follows:
   ("C-x C-b" . 'consult-buffer)
   ("M-g o" . 'consult-outline)
   ("M-s g" . 'consult-grep)
-  ("M-s r" . 'consult-ripgrep))
+  ("M-s r" . 'consult-ripgrep)
+  ("M-s i" . 'consult-imenu))
  :custom
  (completion-in-region-function #'consult-completion-in-region))
 
@@ -509,7 +457,7 @@ The DWIM behaviour of this command is as follows:
   :config
   (global-set-key (kbd "s-;") #'avy-goto-char)
   (global-set-key (kbd "M-g w") #'avy-goto-word-1)
-  (global-set-key (kbd "C-c C-j") 'avy-resume))
+  (global-set-key (kbd "C-c C-j") 'avy-resume)) 
 
 ;;; Helpers
 (use-package
@@ -532,7 +480,7 @@ The DWIM behaviour of this command is as follows:
 (use-package
  company
  :ensure t
- :bind ("C-M-/" . company-complete-common-or-cycle)
+ :bind ("C-M-c " . company-complete-common-or-cycle)
  :diminish
  :init (global-company-mode)
  :config
@@ -672,25 +620,15 @@ The DWIM behaviour of this command is as follows:
  ;;(load-theme 'doom-dracula t)
  (doom-themes-org-config) (doom-themes-neotree-config))
 
-(use-package doom-modeline
-  :ensure t
-  :hook (after-init . doom-modeline-mode))
-
 ;; Undo/redo framework
-(use-package
- undo-fu
- :ensure t
- :config
- (global-set-key (kbd "C-/") 'undo-fu-only-undo)
- (global-set-key (kbd "C-M-/") 'undo-fu-only-redo))
-
-(use-package
- undo-fu-session
- :ensure t
- :config
- (setq undo-fu-session-incompatible-files
-       '("/COMMIT_EDITMSG\\'" "/git-rebase-todo\\'"))
- (global-undo-fu-session-mode))
+(use-package undo-tree
+  :ensure t
+  :init (global-undo-tree-mode nil)
+  :config(setq undo-tree-visualizer-timestamps t
+               undo-tree-history-directory-alist '(("." . "~/.emacs.d/undo"))
+               undo-tree-visualizer-diff t)
+  (setq undo-tree-auto-save-history nil)
+  :bind (("C-c u" . undo-tree-visualize)))
 
 ;; comment code efficiently
 (use-package
@@ -718,8 +656,6 @@ The DWIM behaviour of this command is as follows:
  (read-process-output-max (* 1024 1024))
  (lsp-keep-workspace-alive nil)
  (lsp-eldoc-hook nil)
- (lsp-clients-clangd-executable "clangd")
- (lsp-clients-clangd-args '("--compile-commands-dir=build"))
  (lsp-file-watch-threshold 15000)
  (lsp-ui-doc-enable nil)
  (lsp-ui-doc-show-with-cursor nil)
@@ -742,7 +678,7 @@ The DWIM behaviour of this command is as follows:
   (clojure-mode . lsp-deferred)
   (rust-mode . lsp-deferred)
   (lsp-mode . lsp-enable-which-key-integration)
-  (rust-ts-mode . lsp-deferred))
+  (rust-mode . lsp-deferred))
  ;;:config
  ;;(define-key lsp-mode-map (kbd "C-c l") lsp-command-map)
  )
@@ -863,14 +799,14 @@ The DWIM behaviour of this command is as follows:
 
 ;; toml
 (use-package
- toml-ts-mode
+ toml-mode
  :init
  :defer t
  :mode "/\\(Cargo.lock\\|\\.cargo/config\\)\\'")
 
 ;; yaml
 (use-package
- yaml-ts-mode
+ yaml-mode
  :defer t
  :init
  :mode "\\.yml\\'"
@@ -881,26 +817,19 @@ The DWIM behaviour of this command is as follows:
   :bind ("C-c d" . docker))
 
 (use-package
-  dockerfile-ts-mode
+  dockerfile-mode
   :defer t
-  :mode (("\\Dockerfile\\'" . dockerfile-ts-mode)
-         ("\\.dockerignore\\'" . dockerfile-ts-mode)))
+  :mode (("\\Dockerfile\\'" . dockerfile-mode)
+         ("\\.dockerignore\\'" . dockerfile-mode)))
 
 (use-package
-  cmake-ts-mode
- :hook (cmake-ts-mode . lsp-deferred))
+  cmake-mode
+ :hook (cmake-mode . lsp-deferred))
 
 (use-package clipetty
   :ensure t
   :hook (after-init . global-clipetty-mode)
   :bind ("M-w" . clipetty-kill-ring-save))
-
-;; python
-(use-package
- python-ts-mode
- :ensure t
- :hook (python-ts-mode . lsp-deferred)
- :custom (python-shell-interpreter "python"))
 
 ;; pyenv
 (use-package pyvenv :config (pyvenv-mode 1))
@@ -966,19 +895,21 @@ The DWIM behaviour of this command is as follows:
   :hook
   (sh-mode . (lambda () (shfmt-on-save-mode))))
 
-;;Terminals
-(use-package
-  exec-path-from-shell
-  :if (memq window-system '(mac ns x))
-  :config (exec-path-from-shell-initialize))
-
 (use-package ielm
   :config
   (add-hook 'ielm-mode-hook #'rainbow-delimiters-mode))
 
 ;; vterm
+(defun remacs/vterm-project-association ()
+  "Associate VTerm buffer with the current project."
+  (when-let ((project (project-current)))
+    (setq-local project-current project)))
+
 (use-package
- vterm
+  vterm
+  :init ;
+  (setq vterm-kill-buffer-on-exit t)
+  (add-hook 'vterm-mode-hook #'remacs/vterm-project-association)
  :hook
  (vterm-mode . (lambda ()
     (hl-line-mode -1)
@@ -1104,31 +1035,21 @@ The DWIM behaviour of this command is as follows:
  :config (setq epg-pinentry-mode 'loopback) (pinentry-start))
 
 ;; Templates
-(use-package
- tempel
- :custom (tempel-trigger-prefix "<")
- :bind
- (("M-+" . tempel-complete) ;; Alternative tempel-expand
-  ("M-*" . tempel-insert))
- :init
- (defun tempel-setup-capf ()
-   (setq-local completion-at-point-functions
-               (cons #'tempel-expand completion-at-point-functions)))
-
- (add-hook 'conf-mode-hook 'tempel-setup-capf)
- (add-hook 'prog-mode-hook 'tempel-setup-capf)
- (add-hook 'text-mode-hook 'tempel-setup-capf)
-
- ;; Optionally make the Tempel templates available to Abbrev,
- ;; either locally or globally. `expand-abbrev' is bound to C-x '.
- (add-hook 'prog-mode-hook #'tempel-abbrev-mode)
- ;; (global-tempel-abbrev-mode)
- )
-
-(use-package
-  tempel-collection
+(use-package yasnippet
   :ensure t
-  :after tempel)
+  ;:hook ((text-mode
+  ;        prog-mode
+  ;        conf-mode
+  ;        c++-ts-mode
+  ;        snippet-mode) . yas-minor-mode-on)
+  :init
+  (setq yas-snippet-dir "~/.emacs.d/snippets")
+  :config
+  (yas-global-mode +1))
+
+(use-package 
+  ripgrep 
+  :ensure t)
 
 (use-package
   sxhkdrc-mode
@@ -1332,46 +1253,12 @@ The DWIM behaviour of this command is as follows:
           ("Asia/Calcutta" "Bangalore")
           ("Asia/Tokyo" "Tokyo"))))
 
-(use-package treesit
-  :ensure nil
-  :init
-  (setq treesit-language-source-alist
-        '((bash "https://github.com/tree-sitter/tree-sitter-bash")
-          (c "https://github.com/tree-sitter/tree-sitter-c")
-          (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
-          (cmake "https://github.com/uyha/tree-sitter-cmake")
-          (python "https://github.com/tree-sitter/tree-sitter-python")
-          (json "https://github.com/tree-sitter/tree-sitter-json")
-          (go "https://github.com/tree-sitter/tree-sitter-go")
-          (yaml "https://github.com/ikatyang/tree-sitter-yaml")
-          (toml "https://github.com/tree-sitter/tree-sitter-toml")
-          (rust "https://github.com/tree-sitter/tree-sitter-rust")))
-  :hook ((bash-ts-mode c-ts-mode c++-ts-mode
-          html-ts-mode js-ts-mode typescript-ts-mode
-          json-ts-mode rust-ts-mode tsx-ts-mode python-ts-mode
-          css-ts-mode yaml-ts-mode) . lsp-deferred)
+(use-package smartparens
+  :ensure t  ;; install the package
+  :hook (prog-mode text-mode markdown-mode) ;; add `smartparens-mode` to these hooks
   :config
-  ;; Auto-install missing parsers
-  (dolist (lang (mapcar #'car treesit-language-source-alist))
-    (unless (treesit-language-available-p lang)
-      (treesit-install-language-grammar lang)))
-
-  ;; Remap traditional modes to Tree-sitter ones
-  (setq major-mode-remap-alist
-        '((bash-mode . bash-ts-mode)
-          (sh-mode . bash-ts-mode)
-          (c-mode . c-ts-mode)
-          (c++-mode . c++-ts-mode)
-          (cmake-mode . cmake-ts-mode)
-          (python-mode . python-ts-mode)
-          (js-mode . js-ts-mode)
-          (json-mode . json-ts-mode)
-          (html-mode . html-ts-mode)
-          (css-mode . css-ts-mode)
-          (go-mode . go-ts-mode)
-          (toml-mode . toml-ts-mode)
-          (rust-mode . rust-ts-mode))
-        treesit-font-lock-level 3))
+  ;; load default config
+  (require 'smartparens-config))
 
 ;;; My functions
 (defun remacs/smart-open-line-above ()
@@ -1615,6 +1502,27 @@ Position the cursor at its beginning, according to the current mode."
         (kill-region (point) end)
       (message "No whitespace found."))))
 
+(defun remacs/fix-iso ()
+  "Update encoding rules around me"
+  (interactive)
+  (message "Changing to latin1")
+  (setq locale-coding-system 'iso-8859-1)
+  (set-terminal-coding-system 'iso-8859-1)
+  (set-keyboard-coding-system 'iso-8859-1)
+  (set-selection-coding-system 'iso-8859-1)
+  (prefer-coding-system 'iso-8859-1)
+  (define-coding-system-alias 'ISO-885901 'iso-8859-1))
+
+(defun remacs/fix-utf ()
+  "Update encoding rules around me"
+  (interactive)
+  (setq locale-coding-system 'utf-8)
+  (set-terminal-coding-system 'utf-8)
+  (set-keyboard-coding-system 'utf-8)
+  (set-selection-coding-system 'utf-8)
+  (prefer-coding-system 'utf-8)
+  (define-coding-system-alias 'UTF-8 'utf-8))
+
 ;; Remap
 (global-set-key (kbd "M-o") #'other-window)
 (global-set-key (kbd "M-i") #'remacs/other-window-backward)
@@ -1624,7 +1532,7 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "M-<right>") #'enlarge-window-horizontally)
 (global-set-key (kbd "M-<left>") #'shrink-window-horizontally)
 
-(global-set-key (kbd "C-c k") #'remacs/kill-to-next-whitespace)
+(global-set-key (kbd "C-c k") #'remacs/kill-all-buffers)
 (global-set-key (kbd "C-c c") #'remacs/insert-comment)
 
 (global-set-key [(control shift return)] #'remacs/smart-open-line-above)
@@ -1641,6 +1549,9 @@ Position the cursor at its beginning, according to the current mode."
 
 (global-set-key (kbd "M-s-<down>") #'remacs/move-line-down)
 (global-set-key (kbd "M-s-<up>") #'remacs/move-line-up)
+(global-set-key (kbd "M-s M-o") #'ff-get-other-file)
+(global-set-key (kbd "C-c s l") #'sort-lines)
+(global-set-key (kbd "C-c y") #'company-yasnippet)
 
 (remacs/ctrl-c-definer
   "=" '(remacs/text-scale-restore :which-key "restore font size")
