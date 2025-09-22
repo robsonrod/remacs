@@ -393,9 +393,10 @@ The DWIM behaviour of this command is as follows:
  consult
  :bind
  (
-  ;;("C-x b" . 'consult-buffer)
+  ("C-c h" . 'consult-isearch-backward)
   ("C-x C-b" . 'consult-buffer)
   ("M-g o" . 'consult-outline)
+  ("M-g M-g" . 'consult-goto-line)
   ("M-s g" . 'consult-grep)
   ("M-s r" . 'consult-ripgrep)
   ("M-s i" . 'consult-imenu))
@@ -451,13 +452,14 @@ The DWIM behaviour of this command is as follows:
   ("C-x C-j" . consult-dir-jump-file))
  :custom (consult-dir-project-list-function nil))
 
-
 (use-package
   avy
   :config
-  (global-set-key (kbd "s-;") #'avy-goto-char)
-  (global-set-key (kbd "M-g w") #'avy-goto-word-1)
-  (global-set-key (kbd "C-c C-j") 'avy-resume)) 
+  (global-set-key (kbd "C-c j") #'avy-goto-char-timer)
+  (global-set-key (kbd "C-c w") #'avy-goto-word-or-subword-1)
+  (global-set-key (kbd "C-c g") #'avy-goto-line)
+  (setq avy-background t)
+  (setq avy-timeout-seconds 0.2)) 
 
 ;;; Helpers
 (use-package
@@ -480,7 +482,7 @@ The DWIM behaviour of this command is as follows:
 (use-package
  company
  :ensure t
- :bind ("C-M-c " . company-complete-common-or-cycle)
+ :bind ("C-M-/" . company-complete-common-or-cycle)
  :diminish
  :init (global-company-mode)
  :config
@@ -588,8 +590,8 @@ The DWIM behaviour of this command is as follows:
  :demand t
  :bind-keymap ("C-c p" . projectile-command-map)
  :init
- (when (file-directory-p "~/dev/personal")
-   (setq projectile-project-search-path '("~/dotfiles" "~/dev/personal")))
+ (when (file-directory-p "~/dotfiles")
+   (setq projectile-project-search-path '("~/dotfiles" "~/dev/personal" "~/dev/work")))
  (setq projectile-switch-project-action
        #'remacs/switch-project-action))
 
@@ -605,7 +607,17 @@ The DWIM behaviour of this command is as follows:
 (use-package
  git-gutter
  :hook (prog-mode . git-gutter-mode)
- :config (setq git-gutter:update-interval 0.02))
+ :config
+ (setq git-gutter:update-interval 0.02)
+ (set-face-background 'git-gutter:modified "blue")
+;; (set-face-background 'git-gutter:modified "black")
+ (set-face-foreground 'git-gutter:added "green")
+ (set-face-foreground 'git-gutter:deleted "red")
+ (custom-set-variables
+ '(git-gutter:modified-sign "**")
+ '(git-gutter:added-sign "++")
+ '(git-gutter:deleted-sign "--"))
+ )
 
 ;; Modeline and themes
 (use-package minions :config (minions-mode 1))
@@ -629,11 +641,6 @@ The DWIM behaviour of this command is as follows:
                undo-tree-visualizer-diff t)
   (setq undo-tree-auto-save-history nil)
   :bind (("C-c u" . undo-tree-visualize)))
-
-;; comment code efficiently
-(use-package
- evil-nerd-commenter
- :bind ("M-/" . 'evilnc-comment-or-uncomment-lines))
 
 ;;;; Programming
 ;; LSP
@@ -1191,7 +1198,7 @@ The DWIM behaviour of this command is as follows:
  :config
  (general-create-definer
   remacs/major-mode-leader-map
-  :prefix "s-x")
+  :prefix "s-c")
  (general-create-definer remacs/ctrl-c-definer :prefix "C-c"))
 
 (use-package
@@ -1260,6 +1267,41 @@ The DWIM behaviour of this command is as follows:
   ;; load default config
   (require 'smartparens-config))
 
+(use-package devil
+  :ensure t
+  :demand t
+  :config
+  (global-devil-mode 1)
+  (setq override-text-conversion-style nil))
+
+(use-package pdf-tools
+  :ensure t
+  :magic ("%PDF" . pdf-view-mode)
+  :config
+  (pdf-tools-install)
+  (setq-default pdf-view-display-size 'fit-width)
+  (setq pdf-annot-activate-created-annotations t)
+
+  ;; Enable midnight mode (dark background) by default
+  (setq pdf-view-midnight-colors '("#ffffff" . "#000000")) ; white text on black bg
+  (add-hook 'pdf-view-mode-hook #'pdf-view-midnight-minor-mode)
+
+  ;; Keybindings
+  (define-key pdf-view-mode-map (kbd "C-s") 'isearch-forward)
+  (define-key pdf-view-mode-map (kbd "C-c C-a h") 'pdf-annot-add-highlight-markup-annotation)
+  (define-key pdf-view-mode-map (kbd "C-c C-a t") 'pdf-annot-add-text-annotation)
+  (define-key pdf-view-mode-map (kbd "C-c C-a d") 'pdf-annot-delete))
+
+;; Optional: Toggle Midnight Mode manually
+(defun my/pdf-toggle-dark-mode ()
+  "Toggle PDF midnight mode (dark mode)."
+  (interactive)
+  (if (bound-and-true-p pdf-view-midnight-minor-mode)
+      (pdf-view-midnight-minor-mode -1)
+    (pdf-view-midnight-minor-mode 1)))
+
+(global-set-key (kbd "<f8>") 'my/pdf-toggle-dark-mode)
+
 ;;; My functions
 (defun remacs/smart-open-line-above ()
   "Insert an empty line above the current line.
@@ -1268,7 +1310,7 @@ Position the cursor at it's beginning, according to the current mode."
   (move-beginning-of-line nil)
   (newline-and-indent)
   (forward-line -1)
-  (indent-according-to-mode))
+  (indent-according-to-modee))
 
 (defun remacs/smart-open-line ()
   "Insert an empty line after the current line.
@@ -1441,18 +1483,6 @@ Position the cursor at its beginning, according to the current mode."
   (interactive "p")
   (remacs/my-change-number-at-point '- (or increment 1)))
 
-(defun remacs/insert-comment ()
-  (interactive)
-  (move-beginning-of-line nil)
-  (newline-and-indent)
-  (forward-line -1)
-  (insert "//")
-  (insert-char ?= 97))
-
-(defun remacs/other-window-backward ()
-  (interactive)
-  (other-window -1))
-
 (defun remacs/delete-file-and-buffer ()
   "Kills the current buffer and deletes the file it is visiting."
   (interactive)
@@ -1502,6 +1532,21 @@ Position the cursor at its beginning, according to the current mode."
         (kill-region (point) end)
       (message "No whitespace found."))))
 
+(defun remacs/kill-inner-word()
+  "Kill the entire word that your cursor is in"
+  (interactive)
+  (forward-char 1)
+  (backward-word)
+  (kill-word 1))
+
+(defun remacs/copy-whole-line()
+  "Copies a line without regard for cursor position"
+  (interactive)
+  (save-excursion
+    (kill-new (buffer-substring
+               (point-at-bol)
+               (point-at-eol)))))
+
 (defun remacs/fix-iso ()
   "Update encoding rules around me"
   (interactive)
@@ -1524,24 +1569,21 @@ Position the cursor at its beginning, according to the current mode."
   (define-coding-system-alias 'UTF-8 'utf-8))
 
 ;; Remap
-(global-set-key (kbd "M-o") #'other-window)
-(global-set-key (kbd "M-i") #'remacs/other-window-backward)
-
+(global-set-key (kbd "C-<tab>") #'other-window)
 (global-set-key (kbd "M-<down>") #'enlarge-window)
 (global-set-key (kbd "M-<up>") #'shrink-window)
 (global-set-key (kbd "M-<right>") #'enlarge-window-horizontally)
 (global-set-key (kbd "M-<left>") #'shrink-window-horizontally)
 
-(global-set-key (kbd "C-c k") #'remacs/kill-all-buffers)
-(global-set-key (kbd "C-c c") #'remacs/insert-comment)
-
 (global-set-key [(control shift return)] #'remacs/smart-open-line-above)
 (global-set-key [(shift return)] #'remacs/smart-open-line)
 
 (global-set-key (kbd "C-x K") #'remacs/delete-file-and-buffer)
+(global-set-key (kbd "C-x j") #'dired-jump)
 (global-set-key (kbd "C-x R") #'rename-visited-file)
 (global-set-key (kbd "C-x C-l") #'downcase-dwim)
 (global-set-key (kbd "C-x C-u") #'upcase-dwim)
+(global-set-key (kbd "C-c K") #'remacs/kill-all-buffers)
 
 ;; https://whhone.com/emacs-config/#modern-editor-behavior
 (global-set-key (kbd "<escape>") #'keyboard-escape-quit)
@@ -1551,7 +1593,15 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "M-s-<up>") #'remacs/move-line-up)
 (global-set-key (kbd "M-s M-o") #'ff-get-other-file)
 (global-set-key (kbd "C-c s l") #'sort-lines)
-(global-set-key (kbd "C-c y") #'company-yasnippet)
+(global-set-key (kbd "C-c k w") #'remacs/kill-inner-word)
+(global-set-key (kbd "C-c y l") #'remacs/copy-whole-linel)
+
+(global-set-key (kbd "C-c C-q") #'view-mode)
+
+(global-set-key (kbd "C-x g n") #'git-gutter:next-hunk)
+(global-set-key (kbd "C-x g p") #'git-gutter:previous-hunk)
+(global-set-key (kbd "C-x g r") #'git-gutter:revert-hunk)
+(global-set-key (kbd "C-x g v") #'git-gutter:popup-hunk)
 
 (remacs/ctrl-c-definer
   "=" '(remacs/text-scale-restore :which-key "restore font size")
