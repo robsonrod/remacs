@@ -1575,26 +1575,58 @@ Position the cursor at its beginning, according to the current mode."
   (shell-command (format "find %s -type f -iname \"*.c\" -o -iname \"*.h\" -o -iname \"*.cpp\" -o -iname \"*.hpp\" -o -iname \"*.inc\" | xargs %s -a" (directory-file-name dirname) path-to-ctags)))
 
 (defun sim-vi-w (&optional arg)
-  "Simulate Vi's \"w\" behavior"
+  "Simulate Vi's \"w\" behavior."
   (interactive "p")
   (let ((count (or arg 1)))
     (dotimes (_ count)
-      ;; Skip any whitespace first
-      (while (looking-at "[[:space:]]")
+      ;; Skip any whitespace
+      (while (and (not (eobp))
+                  (looking-at "[[:space:]]"))
         (forward-char))
-      ;; Then skip over the current word or punctuation sequence
-      (cond
-       ;; Word characters: letters, digits, _
-       ((looking-at "\\w")
-        (while (looking-at "\\w")
+      ;; If at end of buffer, stop
+      (unless (eobp)
+        ;; Move over word character or single punctuation
+        (cond
+         ((looking-at "\\w")
+          (while (and (not (eobp))
+                      (looking-at "\\w"))
+            (forward-char)))
+         ((looking-at "[^[:space:][:alnum:]_]")
+          ;; Move over a *single* punctuation char like Vi
           (forward-char)))
-       ;; Punctuation or symbols: non-word, non-space
-       ((looking-at "[^[:space:][:alnum:]_]") 
-        (while (looking-at "[^[:space:][:alnum:]_]")
-          (forward-char)))))))
+        ;; Otherwise, move at least one char to avoid infinite loop
+        (when (and (not (eobp))
+                   (not (looking-at "\\w\\|[^[:space:][:alnum:]_]")))
+          (forward-char))))))
+
+(defun sim-vi-b (&optional arg)
+  "Simulate Vi's \"b\" behavior: move to the beginning of the previous word."
+  (interactive "p")
+  (let ((count (or arg 1)))
+    (dotimes (_ count)
+      ;; Move back over any whitespace first
+      (while (and (not (bobp))
+                  (looking-back "[[:space:]]" 1))
+        (backward-char))
+      ;; If at beginning of buffer, stop
+      (unless (bobp)
+        ;; If we're on a word character, go back over word
+        (cond
+         ((looking-back "\\w" 1)
+          (while (and (not (bobp))
+                      (looking-back "\\w" 1))
+            (backward-char)))
+         ;; If we're on punctuation/symbol, go back one
+         ((looking-back "[^[:space:][:alnum:]_]" 1)
+          (backward-char)))
+        ;; If we landed *inside* a word, go to beginning of it
+        (while (and (not (bobp))
+                    (looking-back "\\w" 1))
+          (backward-char))))))
 
 ;; Remap
 (global-set-key (kbd "M-f") #'sim-vi-w)
+(global-set-key (kbd "M-b") #'sim-vi-b)
 (global-set-key (kbd "C-<tab>") #'other-window)
 (global-set-key (kbd "M-<down>") #'enlarge-window)
 (global-set-key (kbd "M-<up>") #'shrink-window)
