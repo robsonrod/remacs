@@ -47,7 +47,7 @@
 (setq custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file :no-error-if-file-is-missing)
 
-(when (eq (string-match "d728970d49a1" system-name) 0)
+(when (getenv "ISO_PROJECT")
   (message "Changing to latin1")
   (prefer-coding-system 'iso-8859-1)
   (set-default-coding-systems 'iso-8859-1)
@@ -370,7 +370,7 @@ The DWIM behaviour of this command is as follows:
  :after vertico
  :ensure t
  :bind
- (("C-c ." . embark-act) ; pick some comfortable binding
+ (("C-c ," . embark-act) ; pick some comfortable binding
   ("C-c ;" . embark-dwim) ; good alternative: M-.
   ("C-h B" . embark-bindings)) ; alternative for `describe-bindings'
  :init
@@ -1568,7 +1568,33 @@ Position the cursor at its beginning, according to the current mode."
   (prefer-coding-system 'utf-8)
   (define-coding-system-alias 'UTF-8 'utf-8))
 
+(setq path-to-ctags "etags")
+(defun remacs/create-tags(dirname)
+  "Create tags file to a project"
+  (interactive "DDirectory: ")
+  (shell-command (format "find %s -type f -iname \"*.c\" -o -iname \"*.h\" -o -iname \"*.cpp\" -o -iname \"*.hpp\" -o -iname \"*.inc\" | xargs %s -a" (directory-file-name dirname) path-to-ctags)))
+
+(defun sim-vi-w (&optional arg)
+  "Simulate Vi's \"w\" behavior"
+  (interactive "p")
+  (let ((count (or arg 1)))
+    (dotimes (_ count)
+      ;; Skip any whitespace first
+      (while (looking-at "[[:space:]]")
+        (forward-char))
+      ;; Then skip over the current word or punctuation sequence
+      (cond
+       ;; Word characters: letters, digits, _
+       ((looking-at "\\w")
+        (while (looking-at "\\w")
+          (forward-char)))
+       ;; Punctuation or symbols: non-word, non-space
+       ((looking-at "[^[:space:][:alnum:]_]") 
+        (while (looking-at "[^[:space:][:alnum:]_]")
+          (forward-char)))))))
+
 ;; Remap
+(global-set-key (kbd "M-f") #'sim-vi-w)
 (global-set-key (kbd "C-<tab>") #'other-window)
 (global-set-key (kbd "M-<down>") #'enlarge-window)
 (global-set-key (kbd "M-<up>") #'shrink-window)
