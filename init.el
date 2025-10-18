@@ -31,7 +31,8 @@
   (error "Emacs 28.2 is required"))
 
 ;;; gc
-(setq gc-cons-threshold (* 50 1000 1000))
+(setq read-process-output-max (* 10 1024 1024)) ;; 10mb
+(setq gc-cons-threshold 200000000)
 
 ;;; profile
 (add-hook
@@ -47,7 +48,7 @@
 (setq custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file :no-error-if-file-is-missing)
 
-(when (getenv "ISO_PROJECT")
+(when (eq (string-match "linux10" system-name) 0)
   (message "Changing to latin1")
   (prefer-coding-system 'iso-8859-1)
   (set-default-coding-systems 'iso-8859-1)
@@ -359,13 +360,14 @@ The DWIM behaviour of this command is as follows:
   (load-theme 'modus-vivendi-tinted t))
 
 ;; modeline icons
-(use-package 
-  minions 
+(use-package
+  minions
+  :init
   :hook (doom-modeline-mode . minions-mode))
 
 ;; doom modeline
-(use-package 
-  doom-modeline 
+(use-package
+  doom-modeline
   :ensure t 
   :init (doom-modeline-mode 1) 
   :custom ((doom-modeline-height 15) 
@@ -457,8 +459,8 @@ The DWIM behaviour of this command is as follows:
   ("C-x C-b" . 'consult-buffer)
   ("M-g o" . 'consult-outline)
   ("M-g M-g" . 'consult-goto-line)
-  ("M-s g" . 'consult-grep)
-  ("M-s r" . 'consult-ripgrep)
+  ("M-s M-g" . 'consult-grep)
+  ("M-s M-r" . 'consult-ripgrep)
   ("M-s i" . 'consult-imenu))
  :custom
  (completion-in-region-function #'consult-completion-in-region))
@@ -476,23 +478,40 @@ The DWIM behaviour of this command is as follows:
  :ensure nil ; it is built-in
  :hook (after-init . savehist-mode))
 
-(use-package
- corfu
- :ensure t
- :hook (after-init . global-corfu-mode)
- :bind (:map corfu-map ("<tab>" . corfu-complete))
- :config
- (setq tab-always-indent 'complete)
- (setq corfu-preview-current nil)
- (setq corfu-min-width 20)
+(use-package corfu
+  :ensure t
+  ;; Optional customizations
+  :custom
+  (corfu-cycle t)                 ; Allows cycling through candidates
+  (corfu-auto t)                  ; Enable auto completion
+  (corfu-auto-prefix 2)           ; Minimum length of prefix for completion
+  (corfu-auto-delay 0)            ; No delay for completion
+  (corfu-popupinfo-delay '(0.5 . 0.2))  ; Automatically update info popup after that numver of seconds
+  (corfu-preview-current 'insert) ; insert previewed candidate
+  (corfu-preselect 'prompt)
+  (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
+  ;; Optionally use TAB for cycling, default is `corfu-complete'.
+  :bind (:map corfu-map
+              ("M-SPC"      . corfu-insert-separator)
+              ("TAB"        . corfu-next)
+              ([tab]        . corfu-next)
+              ("S-TAB"      . corfu-previous)
+              ([backtab]    . corfu-previous)
+              ("S-<return>" . corfu-insert)
+              ("RET"        . corfu-insert))
 
- (setq corfu-popupinfo-delay '(1.25 . 0.5))
- (corfu-popupinfo-mode 1) ; shows documentation after `corfu-popupinfo-delay'
-
- ;; Sort by input history (no need to modify `corfu-sort-function').
- (with-eval-after-load 'savehist
-   (corfu-history-mode 1)
-   (add-to-list 'savehist-additional-variables 'corfu-history)))
+  :init
+  (global-corfu-mode)
+  (corfu-history-mode)
+  (corfu-popupinfo-mode) ; Popup completion info
+  :config
+  (add-hook 'eshell-mode-hook
+            (lambda () (setq-local corfu-quit-at-boundary t
+                              corfu-quit-no-match t
+                              corfu-auto nil)
+              (corfu-mode))
+            nil
+            t))
 
 (use-package
  corfu-terminal
@@ -537,40 +556,6 @@ The DWIM behaviour of this command is as follows:
  ([remap describe-command] . helpful-command)
  ([remap describe-variable] . helpful-variable)
  ([remap describe-key] . helpful-key))
-
-;; Text and code complement
-(use-package
- company
- :ensure t
- :bind ("C-M-/" . company-complete-common-or-cycle)
- :diminish
- :init (global-company-mode)
- :config
- (setq
-  company-show-quick-access t
-  company-minimum-prefix-length 2
-  company-idle-delay 0.5
-  company-show-numbers t
-  company-tooltip-align-annotations t
-  company-begin-commands '(self-insert-command)
-  company-backends
-  '((company-files ; files & directory
-     company-keywords ; keywords
-     company-capf ; what is this?
-     company-yasnippet)
-    (company-abbrev company-dabbrev))))
-
-(use-package
- company-box
- :ensure t
- :after company
- :hook (company-mode . company-box-mode))
-
-(use-package
-  company-shell
-  :after company
-  :config
-  (add-to-list 'company-backends '(company-shell company-shell-env company-fish-shell)))
 
 ;;; The file manager (Dired)
 (use-package
@@ -695,60 +680,95 @@ The DWIM behaviour of this command is as follows:
 ;; Undo/redo framework
 (use-package undo-tree
   :ensure t
-  :init (global-undo-tree-mode nil)
-  :config(setq undo-tree-visualizer-timestamps t
-               undo-tree-history-directory-alist '(("." . "~/.emacs.d/undo"))
-               undo-tree-visualizer-diff t)
-  (setq undo-tree-auto-save-history nil)
-  :bind (("C-c u" . undo-tree-visualize)))
+  :hook
+  (after-init . global-undo-tree-mode)
+  :init
+  (setq undo-tree-visualizer-timestamps t
+        undo-tree-visualizer-diff t
+        undo-limit 800000            
+        undo-strong-limit 12000000           
+        undo-outer-limit 120000000)
+  :bind (("C-c u" . undo-tree-visualize))
+  :config
+  (setq undo-tree-history-directory-alist '(("." . "~/.emacs.d/.cache/undo"))))
 
 ;;;; Programming
 ;; LSP
 (use-package
- lsp-mode
- :after company
- :ensure t
- :defer t
- :commands (lsp lsp-deferred)
- :bind (:map lsp-mode-map ("M-<RET>" . lsp-execute-action))
- :custom
- (lsp-keymap-prefix "C-c l")
- (lsp-enable-xref t)
- (lsp-idle-xref 0.5)
- (lsp-session-file (expand-file-name ".lsp-session" user-emacs-directory))
- (lsp-auto-guess-root nil)
- (lsp-prefer-flymake nil) ; Use flycheck instead of flymake
- (lsp-enable-file-watchers nil)
- (lsp-enable-folding nil)
- (read-process-output-max (* 1024 1024))
- (lsp-keep-workspace-alive nil)
- (lsp-eldoc-hook nil)
- (lsp-file-watch-threshold 15000)
- (lsp-ui-doc-enable nil)
- (lsp-ui-doc-show-with-cursor nil)
- (lsp-modeline-code-actions-enable nil)
- (lsp-signature-render-documentation nil)
- (lsp-lens-enable nil)
- (lsp-enable-symbol-highlighting nil)
- (lsp-eldoc-enable-hover nil)
- (lsp-eldoc-hook nil)
- (lsp-enable-links nil)
- (lsp-log-io nil)
- (lsp-enable-file-watchers nil)
- (lsp-enable-on-type-formatting nil)
- (lsp-completion-show-detail nil)
- (lsp-completion-show-kind nil)
- (lsp-headerline-breadcrumb-enable nil)
- :hook
- ((c-mode . lsp-deferred)
-  (c++-mode . lsp-deferred)
-  (clojure-mode . lsp-deferred)
-  (rust-mode . lsp-deferred)
-  (lsp-mode . lsp-enable-which-key-integration)
-  (rust-mode . lsp-deferred))
- ;;:config
- ;;(define-key lsp-mode-map (kbd "C-c l") lsp-command-map)
- )
+  lsp-mode
+  :ensure t
+  :defer t
+  :commands (lsp lsp-deferred)
+  :bind (:map lsp-mode-map ("M-<RET>" . lsp-execute-action))
+  :hook(
+        (lsp-mode . lsp-enable-which-key-integration)
+        (lsp-mode . lsp-diagnostics-mode)
+        ((c-ts-mode
+          c++-ts-mode
+          rust-ts-mode
+          go-ts-mode
+          clojure-mode
+          python-base-mode) . lsp-deferred))
+  :custom
+  (lsp-keymap-prefix "C-c l")
+  (lsp-enable-xref t)
+  (lsp-idle-xref 0.5)
+  (lsp-session-file (expand-file-name ".lsp-session" user-emacs-directory))
+  (lsp-auto-guess-root nil)
+  (lsp-prefer-flymake nil) ; Use flycheck instead of flymake
+  (lsp-diagnostics-provider :flycheck)
+  (lsp-enable-file-watchers nil)
+  (lsp-enable-folding nil)
+  (lsp-keep-workspace-alive nil)
+  (lsp-eldoc-hook nil)
+  (lsp-file-watch-threshold 15000)
+  (lsp-ui-doc-enable nil)
+  (lsp-ui-doc-show-with-cursor nil)
+  (lsp-modeline-code-actions-enable nil)
+  (lsp-signature-render-documentation nil)
+  (lsp-lens-enable nil)
+  (lsp-enable-symbol-highlighting nil)
+  (lsp-eldoc-enable-hover nil)
+  (lsp-eldoc-hook nil)
+  (lsp-enable-links nil)
+  (lsp-log-io nil)
+  (lsp-enable-file-watchers nil)
+  (lsp-enable-on-type-formatting nil)
+  (lsp-completion-show-detail nil)
+  (lsp-completion-show-kind nil)
+  (lsp-headerline-breadcrumb-enable nil)
+  :preface
+  (defun lsp-booster--advice-json-parse (old-fn &rest args)
+    "Try to parse bytecode instead of json."
+    (or
+     (when (equal (following-char) ?#)
+
+       (let ((bytecode (read (current-buffer))))
+         (when (byte-code-function-p bytecode)
+           (funcall bytecode))))
+     (apply old-fn args)))
+  (defun lsp-booster--advice-final-command (old-fn cmd &optional test?)
+    "Prepend emacs-lsp-booster command to lsp CMD."
+    (let ((orig-result (funcall old-fn cmd test?)))
+      (if (and (not test?)                             ;; for check lsp-server-present?
+               (not (file-remote-p default-directory)) ;; see lsp-resolve-final-command, it would add extra shell wrapper
+               lsp-use-plists
+               (not (functionp 'json-rpc-connection))  ;; native json-rpc
+               (executable-find "emacs-lsp-booster"))
+          (progn
+            (message "Using emacs-lsp-booster for %s!" orig-result)
+            (cons "emacs-lsp-booster" orig-result))
+        orig-result)))
+  :init
+  (setq lsp-use-plists t)
+  ;; Initiate https://github.com/blahgeek/emacs-lsp-booster for performance
+  (advice-add (if (progn (require 'json)
+                         (fboundp 'json-parse-buffer))
+                  'json-parse-buffer
+                'json-read)
+              :around
+              #'lsp-booster--advice-json-parse)
+  (advice-add 'lsp-resolve-final-command :around #'lsp-booster--advice-final-command))
 
 ;; a hight level UI modules of lsp
 (use-package
@@ -766,7 +786,39 @@ The DWIM behaviour of this command is as follows:
  (lsp-ui-doc-show t)
  :bind (:map lsp-ui-mode-map ("C-c i" . lsp-ui-menu)))
 
+(use-package lsp-completion
+  :no-require
+  :hook ((lsp-mode . lsp-completion-mode)))
+
+(use-package lsp-ui
+  :ensure t
+  :commands
+  (lsp-ui-doc-show
+   lsp-ui-doc-glance)
+  :bind (:map lsp-mode-map
+              ("C-c C-d" . 'lsp-ui-doc-glance))
+  :after (lsp-mode evil)
+  :config (setq lsp-ui-doc-enable t
+                evil-lookup-func #'lsp-ui-doc-glance 
+                lsp-ui-doc-show-with-cursor nil      
+                lsp-ui-doc-include-signature t       
+                lsp-ui-doc-position 'at-point))
+
+
 (use-package consult-lsp :init :defer t :after lsp)
+
+(use-package crux
+  :ensure t)
+
+(use-package treesit-auto
+  :ensure t
+  :after emacs
+  :custom
+  (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode t)
+  (treesit-font-lock-level 4))
 
 ;; C++ language server
 (use-package
@@ -782,29 +834,28 @@ The DWIM behaviour of this command is as follows:
     (lsp))))
 
 ;; C++ Formatter
-(use-package
- clang-format
- :ensure t
- :config
- (add-hook
-  'c-mode-common-hook
-  (lambda ()
-    (add-hook
-     (make-local-variable 'before-save-hook) 'clang-format-buffer))))
-
-(use-package
- modern-cpp-font-lock
- :ensure t
- :hook (c++-mode . modern-c++-font-lock-mode))
+(use-package clang-format
+  :ensure t
+  :hook ((c-mode        . remacs/clang-format-before-save)
+         (c++-mode      . remacs/clang-format-before-save)
+         (objc-mode     . remacs/clang-format-before-save)
+         (c-ts-mode     . remacs/clang-format-before-save)
+         (c++-ts-mode   . remacs/clang-format-before-save)
+         (objc-ts-mode  . remacs/clang-format-before-save))
+  :config
+  (defun remacs/clang-format-before-save ()
+    "Buffer-local before-save hook to format C/C++/ObjC code."
+    (when (executable-find "clang-format")
+      (add-hook 'before-save-hook #'clang-format-buffer nil t))))
 
 ;; Rust
 (use-package
- rust-mode
+ rust-ts-mode
  :defer t
  :init
- (setq rust-mode-treesitter-derive t)
  :mode "\\.rs\\'"
  :custom
+ (rust-mode-treesitter-derive t)
  (rust-format-on-save t)
  (lsp-rust-server 'rust-analyzer))
 
@@ -835,16 +886,10 @@ The DWIM behaviour of this command is as follows:
  :commands (elisp-autofmt-mode elisp-autofmt-buffer)
  :hook (emacs-lisp-mode . elisp-autofmt-mode))
 
-(use-package
- eldoc
- :defer t
- :after company
- :init
- (eldoc-add-command
-  'company-complete-selection
-  'company-complete-common
-  'company-capf
-  'company-abort))
+(use-package eldoc-box
+  :ensure t
+  :straight t
+  :defer t)
 
 ;; shell
 (use-package
@@ -949,12 +994,12 @@ The DWIM behaviour of this command is as follows:
 (use-package nix-repl :ensure nix-mode :commands (nix-repl))
 
 ;; syntax check
-(use-package
-  flycheck
+(use-package flycheck
   :ensure t
-  :init
-  :hook
-  (sh-mode . (lambda () (flycheck-mode))))
+  :init (global-flycheck-mode)
+  :bind (:map flycheck-mode-map
+              ("M-n" . flycheck-next-error) ; optional but recommended error navigation
+              ("M-p" . flycheck-previous-error)))
 
 (use-package
   shfmt
@@ -965,6 +1010,22 @@ The DWIM behaviour of this command is as follows:
 (use-package ielm
   :config
   (add-hook 'ielm-mode-hook #'rainbow-delimiters-mode))
+
+;; Highlights the word/symbol at point and any other occurrences in
+;; view. Also allows to jump to the next or previous occurrence.
+;; https://github.com/nschum/highlight-symbol.el
+(use-package highlight-symbol
+  :ensure t
+  :config
+  (setq highlight-symbol-on-navigation-p t)
+  (add-hook 'prog-mode-hook 'highlight-symbol-mode))
+
+;; Emacs minor mode that highlights numeric literals in source code.
+;; https://github.com/Fanael/highlight-numbers
+(use-package highlight-numbers
+  :ensure t
+  :config
+  (add-hook 'prog-mode-hook 'highlight-numbers-mode))
 
 ;; vterm
 (defun remacs/vterm-project-association ()
@@ -1071,7 +1132,7 @@ The DWIM behaviour of this command is as follows:
  :config (eshell-syntax-highlighting-global-mode +1))
 
 ;; Programming enhacements
-(use-package iedit :bind ("C-;" . iedit-mode) :diminish)
+(use-package iedit :bind ("C-c ." . iedit-mode) :diminish)
 
 (use-package
  rainbow-delimiters
