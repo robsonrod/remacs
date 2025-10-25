@@ -30,213 +30,224 @@
 (when (version< emacs-version "28.2")
   (error "Emacs 28.2 is required"))
 
-;;; gc
-(setq read-process-output-max (* 10 1024 1024)) ;; 10mb
-(setq gc-cons-threshold 200000000)
+(require 'package)
 
-;;; profile
-(add-hook
- 'emacs-startup-hook
- (lambda ()
-   (message
-    "*** Emacs loaded in %s with %d garbage collections."
-    (format "%.2f seconds"
-            (float-time
-             (time-subtract after-init-time before-init-time)))
-    gcs-done)))
+;; ---------------------------------------------------------------------------
+;; Package archives
+;; ---------------------------------------------------------------------------
+(setq package-archives
+      '(("gnu"    . "https://elpa.gnu.org/packages/")
+        ("melpa"  . "https://melpa.org/packages/")
+        ("nongnu" . "https://elpa.nongnu.org/nongnu/")
+        ("org"    . "https://orgmode.org/elpa/")))
 
+;; Initialize only if not already done
+(unless (bound-and-true-p package--initialized)
+  (package-initialize))
+
+;; Refresh package list if empty
+(unless package-archive-contents
+  (package-refresh-contents))
+
+;; ---------------------------------------------------------------------------
+;; Persistent state
+;; ---------------------------------------------------------------------------
 (setq custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file :no-error-if-file-is-missing)
 
-(when (eq (string-match "linux10" system-name) 0)
-  (message "Changing to latin1")
-  (prefer-coding-system 'iso-8859-1)
-  (set-default-coding-systems 'iso-8859-1)
-  (set-terminal-coding-system 'utf-8)
-  (set-keyboard-coding-system 'utf-8))
+;; ---------------------------------------------------------------------------
+;; Auto-upgrade settings
+;; ---------------------------------------------------------------------------
+(defvar package-last-upgrade-time 0
+  "Timestamp of the last time packages were upgraded.")
 
-;;; Tweak the looks of Emacs
-;; general variables
-(setq
- inhibit-startup-message t ; no welcome buffer
- initial-scratch-message nil ; scratch buffer text
- initial-scratch-message
-      (format ";; This is `%s'.  Use `%s' to evaluate and print results.\n\n"
-              'lisp-interaction-mode
-              (propertize
-               (substitute-command-keys "\\<lisp-interaction-mode-map>\\[eval-print-last-sexp]")
-               'face 'help-key-binding))
- ring-bell-function 'ignore ; never ding
- history-length 20 ; max history saves
- use-dialog-box nil ; no ugly dialogs
- case-fold-search nil ; case sensitive search
- confirm-kill-processes nil ; just quit
- global-auto-revert-non-file-buffers t ; update buffers thar are non-files too
- sentence-end-double-space nil ; no way double spaces
- load-prefer-newer t ; always load the new file
- tab-always-indent 'complete ; use TAB to complete symbols
- native-comp-async-report-warnings-erros 'silent ; there's not very much I can do
- mouse-wheel-scroll-amount '(2 ((shift) . 1)) ; scroll 2 lines
- mouse-wheel-progressive-speed nil ; don't accelerate
- mouse-wheel-follow-mouse 't ; scroll window under mouse cursor
- vc-follow-symlinks t ; goto the real file
- show-paren-style 'mixed ;highlight the matching paren
- )
+(defvar package-upgrade-interval (* 7 24 60 60)
+  "Interval in seconds between automatic upgrades (default: 7 days).")
 
-(setq
- backup-directory-alist '(("." . "~/.emacs.d/backup"))
- backup-by-copying t ; Don't delink hardlinks
- version-control t ; Use version numbers on backups
- delete-old-versions t ; Automatically delete excess backups
- kept-new-versions 20 ; how many of the newest versions to keep
- kept-old-versions 5
- display-line-numbers-type 't
- dired-kill-when-opening-new-dired-buffer t) ; and how many of the old
+(defun package-upgrade-builtins ()
+  "Upgrade installed packages if enough time has passed since the last upgrade."
+  (when (> (- (float-time) package-last-upgrade-time)
+           package-upgrade-interval)
+    (message "📦 Checking for package upgrades...")
+    (package-refresh-contents)
+    (if (fboundp 'package-upgrade-all)
+        ;; Emacs 29+ built-in upgrade command
+        (package-upgrade-all t)
+      ;; Fallback for older Emacs versions
+      (dolist (pkg (mapcar #'car package-archive-contents))
+        (when (package-installed-p pkg)
+          (package-install pkg))))
+    (setq package-last-upgrade-time (float-time))
+    (customize-save-variable 'package-last-upgrade-time package-last-upgrade-time)
+    (message "✅ Packages upgraded successfully.")))
 
-;; enable/disable modes
-(menu-bar-mode +1)
-(tool-bar-mode -1)
-(blink-cursor-mode -1)
-(scroll-bar-mode -1)
-(tooltip-mode -1)
-(set-fringe-mode 10)
-(auto-revert-mode 1)
-(delete-selection-mode t)
-(column-number-mode t)
-(save-place-mode 1)
-(global-auto-revert-mode 1)
-(global-hl-line-mode +1)
-(show-paren-mode 1)
-(global-display-line-numbers-mode 1)
-(xterm-mouse-mode +1)
-(winner-mode +1)
-(global-prettify-symbols-mode +1)
+;; Schedule auto-upgrade after startup (non-blocking)
+(run-with-idle-timer
+  (* 5 60)  ;; 5 minutes of idle time
+  nil
+  #'package-upgrade-builtins)
 
-;; yes or no question
-(fset 'yes-or-no-p 'y-or-n-p)
-
-;; don't quit immediately and disable suspend key
-(when (display-graphic-p)
-  (setq confirm-kill-emacs 'y-or-n-p)
-  (global-unset-key (kbd "C-x C-z"))
-  (global-unset-key (kbd "C-z")))
-
-;; Save and revert operations
-
-;; auto-save file name conversion.
-(setq auto-save-file-name-transforms
-      `((".*"
-         ,(expand-file-name "auto-save-list" user-emacs-directory)
-         t)))
-
-;; Auto save buffer if idled for 2 seconds.
-(setq auto-save-timeout 2)
-(auto-save-visited-mode 1)
-
-;; Watch and reload the file changed on the disk.
-(setq auto-revert-remote-files t)
-(global-auto-revert-mode 1)
-
-;; Do not generate any messages.
-(setq auto-revert-verbose nil)
-
-;; Do not create lock files (prefix ".#").
-(setq create-lockfiles nil)
-
-;; disable line numbers for some modes
-(dolist (mode
-         '(org-mode-hook
-           term-mode-hook
-           vterm-mode-hook
-           eat-mode-hook
-           shell-mode-hook
-           eshell-mode-hook
-           dired-mode-hook
-           pdf-view-mode-hook))
-  (add-hook mode (lambda () (display-line-numbers-mode -1))))
-
-;; spaces instead of tabs
-(setq-default indent-tabs-mode nil)
-
-;;; Set up the package manager
-(require 'package)
-(setq package-archives
-      '(("melpa" . "https://melpa.org/packages/")
-        ("org" . "https://orgmode.org/elpa/")
-        ("elpa" . "https://elpa.gnu.org/packages/")
-        ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
-(package-initialize)
-
-;; install package manager
-(unless (package-installed-p 'use-package)
-  (package-refresh-contents)
+;; ---------------------------------------------------------------------------
+;; Bootstrap use-package
+;; ---------------------------------------------------------------------------
+(unless (require 'use-package nil 'noerror)
+  (unless package-archive-contents
+    (package-refresh-contents))
   (package-install 'use-package))
+
 (require 'use-package)
-(setq use-package-always-ensure t)
+(setq use-package-always-ensure t
+      use-package-expand-minimally t
+      use-package-compute-statistics nil)
 
-(when (< emacs-major-version 29)
-  (unless (package-installed-p 'use-package)
-    (unless package-archive-contents
-      (package-refresh-contents))
-    (package-install 'use-package)))
+;; Optional: GC tuning for faster startup
+;; Optimize GC during startup
+(setq read-process-output-max (* 10 1024 1024)) ;; 10mb
+(setq gc-cons-threshold #x40000000)  ;; 1GB
+(setq gc-cons-percentage 0.6)
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (setq gc-cons-threshold (* 80 1024 1024)))) ;; 50MB after startup
 
-(add-to-list
- 'display-buffer-alist
- '("\\`\\*\\(Warnings\\|Compile-Log\\)\\*\\'"
-   (display-buffer-no-window)
-   (allow-no-window . t)))
+(message "✅ Package system initialized successfully.")
 
-;;; Basic behaviour
-(use-package server
+(use-package emacs
   :ensure nil
-  :defer 1
+  :init
+  ;; Load custom file
+  (setq custom-file (locate-user-emacs-file "custom.el"))
+  (load custom-file :no-error-if-file-is-missing)
+
+  ;; System-specific settings
+  (when (string-prefix-p "linux10" system-name)
+    (message "Changing to latin1")
+    (prefer-coding-system 'iso-8859-1)
+    (set-default-coding-systems 'iso-8859-1)
+    (set-terminal-coding-system 'utf-8)
+    (set-keyboard-coding-system 'utf-8))
+
+  ;; yes-or-no -> y/n
+  (fset 'yes-or-no-p 'y-or-n-p)
+
+  ;; Disable suspend keys in GUI
+  (when (display-graphic-p)
+    (setq confirm-kill-emacs 'y-or-n-p)
+    (global-unset-key (kbd "C-x C-z"))
+    (global-unset-key (kbd "C-z")))
+  :hook
+  (prog-mode . display-line-numbers-mode)
+  (text-mode . display-line-numbers-mode)
+  (markdown-mode . display-line-numbers-mode)
+  :custom
+  ;; General UI and behavior
+  (inhibit-startup-message t)
+  (indent-tabs-mode nil) ; use spaces instead of tabs
+  (ring-bell-function 'ignore)
+  (history-length 20)
+  (use-dialog-box nil)
+  (case-fold-search nil)
+  (confirm-kill-processes nil)
+  (global-auto-revert-non-file-buffers t)
+  (sentence-end-double-space nil)
+  (load-prefer-newer t)
+  (tab-always-indent 'complete)
+  (native-comp-async-report-warnings-errors 'silent)
+  (mouse-wheel-scroll-amount '(2 ((shift) . 1)))
+  (mouse-wheel-progressive-speed nil)
+  (mouse-wheel-follow-mouse t)
+  (vc-follow-symlinks t)
+  (show-paren-style 'mixed)
+  (treesit-font-lock-level 4)
+  
+  ;; Backup and autosave
+  (backup-directory-alist '(("." . "~/.emacs.d/backup")))
+  (backup-by-copying t)
+  (version-control t)
+  (delete-old-versions t)
+  (kept-new-versions 20)
+  (kept-old-versions 5)
+  (create-lockfiles nil)
+  (auto-save-timeout 2)
+  (auto-save-file-name-transforms
+   `((".*" ,(expand-file-name "auto-save-list" user-emacs-directory) t)))
+  (auto-revert-verbose nil)
+  (auto-revert-remote-files t)
+  (dired-kill-when-opening-new-dired-buffer t)
+
   :config
-  (setq server-client-instructions nil)
-  (unless (server-running-p)
-    (server-start)))
+  (set-face-attribute 'default nil :family "JetBrainsMono Nerd Font"  :height 100)
 
-(use-package
- delsel
- :ensure nil
- :hook (after-init . delete-selection-mode))
+  ;; Enable/disable built-in modes
+  (menu-bar-mode +1)
+  (tool-bar-mode -1)
+  (blink-cursor-mode -1)
+  (scroll-bar-mode -1)
+  (tooltip-mode -1)
+  (set-fringe-mode 10)
 
-(defun prot/keyboard-quit-dwim ()
-  "Do-What-I-Mean behaviour for a general `keyboard-quit'.
+  (auto-revert-mode 1)
+  (delete-selection-mode 1)
+  (column-number-mode 1)
+  (save-place-mode 1)
+  (global-auto-revert-mode 1)
+  (global-hl-line-mode 1)
+  (show-paren-mode 1)
+  (global-display-line-numbers-mode 'absolute)
+  (xterm-mouse-mode 1)
+  (winner-mode 1)
+  (global-prettify-symbols-mode 1)
+  (auto-save-visited-mode 1)
+  (add-hook
+   'emacs-startup-hook
+   (lambda ()
+     (message
+      "*** Emacs loaded in %s with %d garbage collections."
+      (format "%.2f seconds"
+              (float-time
+               (time-subtract after-init-time before-init-time)))
+      gcs-done)))
+  (dolist (mode
+           '(org-mode-hook
+             term-mode-hook
+             vterm-mode-hook
+             eat-mode-hook
+             shell-mode-hook
+             eshell-mode-hook
+             dired-mode-hook
+             pdf-view-mode-hook))
+    (add-hook mode (lambda () (display-line-numbers-mode -1)))))
 
-The generic `keyboard-quit' does not do the expected thing when
-the minibuffer is open.  Whereas we want it to close the
-minibuffer, even without explicitly focusing it.
+(use-package window
+  :ensure nil       ;; This is built-in, no need to fetch it.
+  :custom
+  (display-buffer-alist
+   '(
+     ("\\*\\(Backtrace\\|Warnings\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 0))
 
-The DWIM behaviour of this command is as follows:
+     ("\\*\\(Compile-Log\\)\\*"
+      (display-buffer-no-window)
+      (allow-no-window . t))
+     
+     ;; Example configuration for the LSP help buffer,
+     ;; keeps it always on bottom using 25% of the available space:
+     ("\\*\\(lsp-help\\)\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 0))
 
-- When the region is active, disable it.
-- When a minibuffer is open, but not focused, close the minibuffer.
-- When the Completions buffer is selected, close it.
-- In every other case use the regular `keyboard-quit'."
-  (interactive)
-  (cond
-   ((region-active-p)
-    (keyboard-quit))
-   ((derived-mode-p 'completion-list-mode)
-    (delete-completion-window))
-   ((> (minibuffer-depth) 0)
-    (abort-recursive-edit))
-   (t
-    (keyboard-quit))))
-
-(define-key global-map (kbd "C-g") #'prot/keyboard-quit-dwim)
-
-(let ((mono-spaced-font "JetBrainsMono Nerd Font")
-      (proportionately-spaced-font "JetBrainsMono Nerd Font"))
-  (set-face-attribute 'default nil
-                      :family mono-spaced-font
-                      :height 100)
-  (set-face-attribute 'fixed-pitch nil
-                      :family mono-spaced-font
-                      :height 1.0)
-  (set-face-attribute 'variable-pitch nil
-                      :family proportionately-spaced-font
-                      :height 1.0))
+     ;; Configuration for displaying various diagnostic buffers on
+     ;; bottom 25%:
+     ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 1))
+     )))
 
 (use-package modus-themes
   :ensure t
@@ -359,6 +370,29 @@ The DWIM behaviour of this command is as follows:
   :init
   (load-theme 'modus-vivendi-tinted t))
 
+(use-package treesit-auto
+  :ensure t
+  :after emacs
+  :custom
+  (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode t))
+
+;;; Basic behaviour
+(use-package server
+  :ensure nil
+  :defer 1
+  :config
+  (setq server-client-instructions nil)
+  (unless (server-running-p)
+    (server-start)))
+
+(use-package
+  delsel
+  :ensure nil
+  :hook (after-init . delete-selection-mode))
+
 ;; modeline icons
 (use-package
   minions
@@ -368,8 +402,8 @@ The DWIM behaviour of this command is as follows:
 ;; doom modeline
 (use-package
   doom-modeline
-  :ensure t 
-  :init (doom-modeline-mode 1) 
+  :ensure t
+  :init (doom-modeline-mode 1)
   :custom ((doom-modeline-height 15) 
            (doom-modeline-bar-width 6) 
            (doom-modeline-lsp t) 
@@ -385,98 +419,98 @@ The DWIM behaviour of this command is as follows:
 (use-package nerd-icons :ensure t)
 
 (use-package
- nerd-icons-completion
- :ensure t
- :after marginalia
- :config
- (add-hook
-  'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
+  nerd-icons-completion
+  :ensure t
+  :after marginalia
+  :config
+  (add-hook
+   'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
 
 (use-package
- nerd-icons-corfu
- :ensure t
- :after corfu
- :config
- (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+  nerd-icons-corfu
+  :ensure t
+  :after corfu
+  :config
+  (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
 (use-package
- nerd-icons-dired
- :ensure t
- :hook (dired-mode . nerd-icons-dired-mode))
+  nerd-icons-dired
+  :ensure t
+  :hook (dired-mode . nerd-icons-dired-mode))
 
 ;;; Configure the minibuffer and completions
 (use-package
- vertico
- :bind
- (:map
-  vertico-map
-  ("C-j" . vertico-next)
-  ("C-k" . vertico-previous)
-  ("C-f" . vertico-exit)
-  :map
-  minibuffer-local-map
-  ("M-h" . backward-kill-word))
- :custom (vertico-cycle t)
- :init (vertico-mode))
+  vertico
+  :bind
+  (:map
+   vertico-map
+   ("C-j" . vertico-next)
+   ("C-k" . vertico-previous)
+   ("C-f" . vertico-exit)
+   :map
+   minibuffer-local-map
+   ("M-h" . backward-kill-word))
+  :custom (vertico-cycle t)
+  :init (vertico-mode))
 
 (use-package
- marginalia
- :after vertico
- :custom
- (marginalia-annotators
-  '(marginalia-annotators-heavy marginalia-annotators-ligh nil))
- :init (marginalia-mode))
+  marginalia
+  :after vertico
+  :custom
+  (marginalia-annotators
+   '(marginalia-annotators-heavy marginalia-annotators-ligh nil))
+  :init (marginalia-mode))
 
 (use-package
- embark
- :after vertico
- :ensure t
- :bind
- (("C-c ," . embark-act) ; pick some comfortable binding
-  ("C-c ;" . embark-dwim) ; good alternative: M-.
-  ("C-h B" . embark-bindings)) ; alternative for `describe-bindings'
- :init
- ;; Optionally replace the key help with a completing-read interface
- (setq prefix-help-command #'embark-prefix-help-command)
- :config
- ;; Hide the mode line of the Embark live/completions buffers
- (add-to-list
-  'display-buffer-alist
-  '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
-    nil
-    (window-parameters (mode-line-format . none)))))
+  embark
+  :after vertico
+  :ensure t
+  :bind
+  (("C-c ," . embark-act) ; pick some comfortable binding
+   ("C-c ;" . embark-dwim) ; good alternative: M-.
+   ("C-h B" . embark-bindings)) ; alternative for `describe-bindings'
+  :init
+  ;; Optionally replace the key help with a completing-read interface
+  (setq prefix-help-command #'embark-prefix-help-command)
+  :config
+  ;; Hide the mode line of the Embark live/completions buffers
+  (add-to-list
+   'display-buffer-alist
+   '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+     nil
+     (window-parameters (mode-line-format . none)))))
 
 (use-package
- embark-consult
- :ensure t ; only need to install it, embark loads it after consult if found
- :hook (embark-collect-mode . consult-preview-at-point-mode))
+  embark-consult
+  :ensure t ; only need to install it, embark loads it after consult if found
+  :hook (embark-collect-mode . consult-preview-at-point-mode))
 
 (use-package
- consult
- :bind
- (
-  ("C-c h" . 'consult-isearch-backward)
-  ("C-x C-b" . 'consult-buffer)
-  ("M-g o" . 'consult-outline)
-  ("M-g M-g" . 'consult-goto-line)
-  ("M-s M-g" . 'consult-grep)
-  ("M-s M-r" . 'consult-ripgrep)
-  ("M-s i" . 'consult-imenu))
- :custom
- (completion-in-region-function #'consult-completion-in-region))
+  consult
+  :bind
+  (
+   ("C-c h" . 'consult-isearch-backward)
+   ("C-x C-b" . 'consult-buffer)
+   ("M-g o" . 'consult-outline)
+   ("M-g M-g" . 'consult-goto-line)
+   ("M-s M-g" . 'consult-grep)
+   ("M-s M-r" . 'consult-ripgrep)
+   ("M-s i" . 'consult-imenu))
+  :custom
+  (completion-in-region-function #'consult-completion-in-region))
 
 (use-package
- orderless
- :ensure t
- :config
- (setq completion-styles '(orderless basic))
- (setq completion-category-defaults nil)
- (setq completion-category-overrrides nil))
+  orderless
+  :ensure t
+  :config
+  (setq completion-styles '(orderless basic))
+  (setq completion-category-defaults nil)
+  (setq completion-category-overrrides nil))
 
 (use-package
- savehist
- :ensure nil ; it is built-in
- :hook (after-init . savehist-mode))
+  savehist
+  :ensure nil ; it is built-in
+  :hook (after-init . savehist-mode))
 
 (use-package corfu
   :ensure t
@@ -507,29 +541,29 @@ The DWIM behaviour of this command is as follows:
   :config
   (add-hook 'eshell-mode-hook
             (lambda () (setq-local corfu-quit-at-boundary t
-                              corfu-quit-no-match t
-                              corfu-auto nil)
+                                   corfu-quit-no-match t
+                                   corfu-auto nil)
               (corfu-mode))
             nil
             t))
 
 (use-package
- corfu-terminal
- :config
- (unless (display-graphic-p)
-   (corfu-terminal-mode +1)))
+  corfu-terminal
+  :config
+  (unless (display-graphic-p)
+    (corfu-terminal-mode +1)))
 
 (use-package wgrep :after consult :hook (grep-mode . wgrep-setup))
 
 (use-package
- consult-dir
- :bind
- (("C-x C-d" . consult-dir)
-  :map
-  vertico-map
-  ("C-x C-d" . consult-dir)
-  ("C-x C-j" . consult-dir-jump-file))
- :custom (consult-dir-project-list-function nil))
+  consult-dir
+  :bind
+  (("C-x C-d" . consult-dir)
+   :map
+   vertico-map
+   ("C-x C-d" . consult-dir)
+   ("C-x C-j" . consult-dir-jump-file))
+  :custom (consult-dir-project-list-function nil))
 
 (use-package
   avy
@@ -542,81 +576,81 @@ The DWIM behaviour of this command is as follows:
 
 ;;; Helpers
 (use-package
- which-key
- :init (which-key-mode)
- :diminish which-key-mode
- :config (setq which-key-idle-delay 0.3))
+  which-key
+  :init (which-key-mode)
+  :diminish which-key-mode
+  :config (setq which-key-idle-delay 0.3))
 
 (use-package
- helpful
- :init
- :defer t
- :bind
- ([remap describe-function] . helpful-function)
- ([remap describe-command] . helpful-command)
- ([remap describe-variable] . helpful-variable)
- ([remap describe-key] . helpful-key))
+  helpful
+  :init
+  :defer t
+  :bind
+  ([remap describe-function] . helpful-function)
+  ([remap describe-command] . helpful-command)
+  ([remap describe-variable] . helpful-variable)
+  ([remap describe-key] . helpful-key))
 
 ;;; The file manager (Dired)
 (use-package
- dired
- :ensure nil
- :init (with-eval-after-load 'dired (require 'dired-x))
- :commands (dired dired-jump)
- :hook
- ((dired-mode . dired-hide-details-mode)
-  (dired-mode . hl-line-mode)
-  (dired-mode . dired-omit-mode))
- :bind
- (:map dired-mode-map ("b" . dired-up-directory))
- (:map dired-mode-map ("." . dired-omit-mode))
- :config
- (setq dired-listing-switches "-goah --group-directories-first --time-style=long-iso")
- (setq dired-recursive-copies 'always)
- (setq dired-recursive-deletes 'always)
- (setq delete-by-moving-to-trash t)
- (setq dired-dwim-target t)
- (setq dired-omit-files (rx (seq bol "."))) ;; Omit dot files
- (put 'dired-find-alternate-file 'disabled nil))
+  dired
+  :ensure nil
+  :init (with-eval-after-load 'dired (require 'dired-x))
+  :commands (dired dired-jump)
+  :hook
+  ((dired-mode . dired-hide-details-mode)
+   (dired-mode . hl-line-mode)
+   (dired-mode . dired-omit-mode))
+  :bind
+  (:map dired-mode-map ("b" . dired-up-directory))
+  (:map dired-mode-map ("." . dired-omit-mode))
+  :config
+  (setq dired-listing-switches "-goah --group-directories-first --time-style=long-iso")
+  (setq dired-recursive-copies 'always)
+  (setq dired-recursive-deletes 'always)
+  (setq delete-by-moving-to-trash t)
+  (setq dired-dwim-target t)
+  (setq dired-omit-files (rx (seq bol "."))) ;; Omit dot files
+  (put 'dired-find-alternate-file 'disabled nil))
 
 (use-package
- dired-subtree
- :ensure t
- :after dired
- :bind
- (:map
-  dired-mode-map
-  ("<tab>" . dired-subtree-toggle)
-  ("TAB" . dired-subtree-toggle)
-  ("<backtab>" . dired-subtree-remove)
-  ("S-TAB" . dired-subtree-remove))
- :config (setq dired-subtree-use-backgrounds nil))
+  dired-subtree
+  :ensure t
+  :after dired
+  :bind
+  (:map
+   dired-mode-map
+   ("<tab>" . dired-subtree-toggle)
+   ("TAB" . dired-subtree-toggle)
+   ("<backtab>" . dired-subtree-remove)
+   ("S-TAB" . dired-subtree-remove))
+  :config (setq dired-subtree-use-backgrounds nil))
 
 (use-package
- trashed
- :ensure t
- :commands (trashed)
- :config
- (setq trashed-action-confirmer 'y-or-n-p)
- (setq trashed-use-header-line t)
- (setq trashed-sort-key '("Date deleted" . t))
- (setq trashed-date-format "%Y-%m-%d %H:%M:%S"))
+  trashed
+  :ensure t
+  :commands (trashed)
+  :config
+  (setq trashed-action-confirmer 'y-or-n-p)
+  (setq trashed-use-header-line t)
+  (setq trashed-sort-key '("Date deleted" . t))
+  (setq trashed-date-format "%Y-%m-%d %H:%M:%S"))
 
 ;;; Named workspaces
 (use-package
- perspective
- :demand t
- :bind
- (("s-c p" . persp-switch)
-  ("s-c n" . persp-next)
-  ("C-x k" . persp-kill-buffer*))
- :custom
- (persp-initial-frame-name "Main")
- (persp-mode-prefix-key (kbd "C-c M-p"))
- :config
- ;; Running `persp-mode' multiple times resets the perspective list...
- (unless (equal persp-mode t)
-   (persp-mode)))
+  perspective
+  :demand t
+  :bind
+  (("s-c p" . persp-switch)
+   ("s-c n" . persp-next)
+   ("C-x k" . persp-kill-buffer*))
+  :custom
+  (persp-initial-frame-name "Main")
+  (persp-mode-prefix-key (kbd "C-c M-p"))
+  :config
+  ;; Running `persp-mode' multiple times resets the perspective list...
+  (unless (equal persp-mode t)
+    (persp-mode)))
 
 ;;; Projects
 (defun remacs/switch-project-action ()
@@ -625,57 +659,57 @@ The DWIM behaviour of this command is as follows:
   (magit-status))
 
 (use-package
- projectile
- :diminish projectile-mode
- :config (projectile-mode)
- (setq projectile-globally-ignored-directories
-       (append
-        '(".git" ".ccls_cache")
-        projectile-globally-ignored-directories))
- :demand t
- :bind-keymap ("C-c p" . projectile-command-map)
- :init
- (when (file-directory-p "~/dotfiles")
-   (setq projectile-project-search-path '("~/dotfiles" "~/dev/personal" "~/dev/work")))
- (setq projectile-switch-project-action
-       #'remacs/switch-project-action))
+  projectile
+  :diminish projectile-mode
+  :config (projectile-mode)
+  (setq projectile-globally-ignored-directories
+        (append
+         '(".git" ".ccls_cache")
+         projectile-globally-ignored-directories))
+  :demand t
+  :bind-keymap ("C-c p" . projectile-command-map)
+  :init
+  (when (file-directory-p "~/dotfiles")
+    (setq projectile-project-search-path '("~/dotfiles" "~/dev/personal" "~/dev/work")))
+  (setq projectile-switch-project-action
+        #'remacs/switch-project-action))
 
 ;; Git support
 (use-package
- magit
- :bind ("C-M-;" . magit-status)
- :commands (magit-status magit-get-current-branch)
- :custom
- (magit-display-buffer-function
-  #'magit-display-buffer-same-window-except-diff-v1))
+  magit
+  :bind ("C-M-;" . magit-status)
+  :commands (magit-status magit-get-current-branch)
+  :custom
+  (magit-display-buffer-function
+   #'magit-display-buffer-same-window-except-diff-v1))
 
 (use-package
- git-gutter
- :hook (prog-mode . git-gutter-mode)
- :config
- (setq git-gutter:update-interval 0.02)
- (set-face-background 'git-gutter:modified "blue")
-;; (set-face-background 'git-gutter:modified "black")
- (set-face-foreground 'git-gutter:added "green")
- (set-face-foreground 'git-gutter:deleted "red")
- (custom-set-variables
- '(git-gutter:modified-sign "**")
- '(git-gutter:added-sign "++")
- '(git-gutter:deleted-sign "--"))
- )
+  git-gutter
+  :hook (prog-mode . git-gutter-mode)
+  :config
+  (setq git-gutter:update-interval 0.02)
+  (set-face-background 'git-gutter:modified "blue")
+  ;; (set-face-background 'git-gutter:modified "black")
+  (set-face-foreground 'git-gutter:added "green")
+  (set-face-foreground 'git-gutter:deleted "red")
+  (custom-set-variables
+   '(git-gutter:modified-sign "**")
+   '(git-gutter:added-sign "++")
+   '(git-gutter:deleted-sign "--"))
+  )
 
 ;; Modeline and themes
 (use-package minions :config (minions-mode 1))
 
 (use-package
- doom-themes
- :ensure t
- :config
- (setq
-  doom-themes-enable-bold t
-  doom-themes-enable-italic t)
- ;;(load-theme 'doom-dracula t)
- (doom-themes-org-config) (doom-themes-neotree-config))
+  doom-themes
+  :ensure t
+  :config
+  (setq
+   doom-themes-enable-bold t
+   doom-themes-enable-italic t)
+  ;;(load-theme 'doom-dracula t)
+  (doom-themes-org-config) (doom-themes-neotree-config))
 
 ;; Undo/redo framework
 (use-package undo-tree
@@ -772,23 +806,19 @@ The DWIM behaviour of this command is as follows:
 
 ;; a hight level UI modules of lsp
 (use-package
- lsp-ui
- :ensure t
- :diminish
- :defer t
- :after lsp
- :hook (lsp-mode . lsp-ui-mode)
- :custom
- (lsp-ui-sideline-enable t)
- (lsp-ui-sideline-show-hover nil)
- (lsp-ui-doc-position 'bottom)
- (lsp-ui-doc-enable t)
- (lsp-ui-doc-show t)
- :bind (:map lsp-ui-mode-map ("C-c i" . lsp-ui-menu)))
-
-(use-package lsp-completion
-  :no-require
-  :hook ((lsp-mode . lsp-completion-mode)))
+  lsp-ui
+  :ensure t
+  :diminish
+  :defer t
+  :after lsp
+  :hook (lsp-mode . lsp-ui-mode)
+  :custom
+  (lsp-ui-sideline-enable t)
+  (lsp-ui-sideline-show-hover nil)
+  (lsp-ui-doc-position 'bottom)
+  (lsp-ui-doc-enable t)
+  (lsp-ui-doc-show t)
+  :bind (:map lsp-ui-mode-map ("C-c i" . lsp-ui-menu)))
 
 (use-package lsp-ui
   :ensure t
@@ -817,21 +847,7 @@ The DWIM behaviour of this command is as follows:
   (treesit-auto-install 'prompt)
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode t)
-  (treesit-font-lock-level 4))
-
-;; C++ language server
-(use-package
- ccls
- :ensure t
- :config
- :hook
- :disabled
- ((c-mode c++-mode objc-mode cuda-mode)
-  .
-  (lambda ()
-    (require 'ccls)
-    (lsp))))
+  (global-treesit-auto-mode t))
 
 ;; C++ Formatter
 (use-package clang-format
@@ -850,14 +866,13 @@ The DWIM behaviour of this command is as follows:
 
 ;; Rust
 (use-package
- rust-ts-mode
- :defer t
- :init
- :mode "\\.rs\\'"
- :custom
- (rust-mode-treesitter-derive t)
- (rust-format-on-save t)
- (lsp-rust-server 'rust-analyzer))
+  rust-ts-mode
+  :defer t
+  :init
+  :mode "\\.rs\\'"
+  :custom
+  (rust-mode-treesitter-derive t)
+  (rust-format-on-save t))
 
 (use-package cargo
   :ensure t
@@ -865,41 +880,39 @@ The DWIM behaviour of this command is as follows:
 
 ;;; markdown
 (use-package
- markdown-mode
- :mode "\\.md\\'"
- :config
- (setq markdown-command "pandoc")
- (setq markdown-asymmetric-header t)
- (setq markdown-header-scaling t)
- (setq markdown-enable-math t)
- :bind
- (:map markdown-mode-map ("M-<left>" . markdown-promote))
- (:map markdown-mode-map ("M-<right>" . markdown-demote))
- (:map markdown-mode-map ("M-S-<left>" . markdown-promote-subtree))
- (:map markdown-mode-map ("M-S-<right>" . markdown-demote-subtree)))
+  markdown-mode
+  :mode "\\.md\\'"
+  :config
+  (setq markdown-command "pandoc")
+  (setq markdown-asymmetric-header t)
+  (setq markdown-header-scaling t)
+  (setq markdown-enable-math t)
+  :bind
+  (:map markdown-mode-map ("M-<left>" . markdown-promote))
+  (:map markdown-mode-map ("M-<right>" . markdown-demote))
+  (:map markdown-mode-map ("M-S-<left>" . markdown-promote-subtree))
+  (:map markdown-mode-map ("M-S-<right>" . markdown-demote-subtree)))
 
 (use-package markdown-preview-mode :commands markdown-preview)
 
 ;; Elisp
-(use-package
- elisp-autofmt
- :commands (elisp-autofmt-mode elisp-autofmt-buffer)
- :hook (emacs-lisp-mode . elisp-autofmt-mode))
+(use-package lispy
+  :hook ((emacs-lisp-mode . lispy-mode)
+         (scheme-mode . lispy-mode)))
 
 (use-package eldoc-box
   :ensure t
-  :straight t
   :defer t)
 
 ;; shell
 (use-package
- shell
- :defer t
- :init
- :config
- (add-hook
-  'after-save-hook
-  'executable-make-buffer-file-executable-if-script-p))
+  shell
+  :defer t
+  :init
+  :config
+  (add-hook
+   'after-save-hook
+   'executable-make-buffer-file-executable-if-script-p))
 
 ;; ssh
 (use-package ssh-config-mode :defer t)
@@ -911,18 +924,18 @@ The DWIM behaviour of this command is as follows:
 
 ;; toml
 (use-package
- toml-mode
- :init
- :defer t
- :mode "/\\(Cargo.lock\\|\\.cargo/config\\)\\'")
+  toml-mode
+  :init
+  :defer t
+  :mode "/\\(Cargo.lock\\|\\.cargo/config\\)\\'")
 
 ;; yaml
 (use-package
- yaml-mode
- :defer t
- :init
- :mode "\\.yml\\'"
- :mode "\\.yaml\\'")
+  yaml-mode
+  :defer t
+  :init
+  :mode "\\.yml\\'"
+  :mode "\\.yaml\\'")
 
 (use-package docker
   :ensure t
@@ -936,7 +949,7 @@ The DWIM behaviour of this command is as follows:
 
 (use-package
   cmake-mode
- :hook (cmake-mode . lsp-deferred))
+  :hook (cmake-mode . lsp-deferred))
 
 (use-package clipetty
   :ensure t
@@ -951,45 +964,45 @@ The DWIM behaviour of this command is as follows:
 
 ;; clojure mode
 (use-package
- clojure-mode
- :after flycheck-clj-kondo
- :config (require 'flycheck-clj-kondo))
+  clojure-mode
+  :after flycheck-clj-kondo
+  :config (require 'flycheck-clj-kondo))
 
 ;; cider clojure
 (setq org-babel-clojure-backend 'cider)
 (use-package
- cider
- :defer t
- :init
- (progn
-   (add-hook 'clojure-mode-hook 'cider-mode)
-   (add-hook 'clojurec-mode-hook 'cider-mode)
-   (add-hook 'cider-repl-mode-hook 'cider-mode))
- :config
- (setq cider-repl-display-help-banner nil)
- (setq cider-auto-mode nil))
+  cider
+  :defer t
+  :init
+  (progn
+    (add-hook 'clojure-mode-hook 'cider-mode)
+    (add-hook 'clojurec-mode-hook 'cider-mode)
+    (add-hook 'cider-repl-mode-hook 'cider-mode))
+  :config
+  (setq cider-repl-display-help-banner nil)
+  (setq cider-auto-mode nil))
 
 ;; scheme
 (use-package
- geiser-guile
- :ensure t
- :config
- (setq scheme-program-name "guile")
- (setq geiser-default-implementation 'guile)
- (setq geiser-active-implementations '(guile))
- (setq geiser-implementations-alist '(((regexp "\\.scm$") guile)))
- (setq geiser-guile-binary "guile")
- (add-hook 'geiser-repl-mode-hook 'rainbow-delimiters-mode)
- (add-hook 'inferior-scheme-mode-hook 'rainbow-delimiters-mode))
+  geiser-guile
+  :ensure t
+  :config
+  (setq scheme-program-name "guile")
+  (setq geiser-default-implementation 'guile)
+  (setq geiser-active-implementations '(guile))
+  (setq geiser-implementations-alist '(((regexp "\\.scm$") guile)))
+  (setq geiser-guile-binary "guile")
+  (add-hook 'geiser-repl-mode-hook 'rainbow-delimiters-mode)
+  (add-hook 'inferior-scheme-mode-hook 'rainbow-delimiters-mode))
 
 (use-package nix-mode :mode ("\\.nix\\'" "\\.nix.in\\'"))
 
 (use-package nix-drv-mode :ensure nix-mode :mode "\\.drv\\'")
 
 (use-package
- nix-shell
- :ensure nix-mode
- :commands (nix-shell-unpack nix-shell-configure nix-shell-build))
+  nix-shell
+  :ensure nix-mode
+  :commands (nix-shell-unpack nix-shell-configure nix-shell-build))
 
 (use-package nix-repl :ensure nix-mode :commands (nix-repl))
 
@@ -1011,17 +1024,12 @@ The DWIM behaviour of this command is as follows:
   :config
   (add-hook 'ielm-mode-hook #'rainbow-delimiters-mode))
 
-;; Highlights the word/symbol at point and any other occurrences in
-;; view. Also allows to jump to the next or previous occurrence.
-;; https://github.com/nschum/highlight-symbol.el
 (use-package highlight-symbol
   :ensure t
   :config
   (setq highlight-symbol-on-navigation-p t)
   (add-hook 'prog-mode-hook 'highlight-symbol-mode))
 
-;; Emacs minor mode that highlights numeric literals in source code.
-;; https://github.com/Fanael/highlight-numbers
 (use-package highlight-numbers
   :ensure t
   :config
@@ -1035,41 +1043,30 @@ The DWIM behaviour of this command is as follows:
 
 (use-package
   vterm
-  :init ;
+  :init
   (setq vterm-kill-buffer-on-exit t)
+  (setq vterm-always-compile-module t)
   (add-hook 'vterm-mode-hook #'remacs/vterm-project-association)
- :hook
- (vterm-mode . (lambda ()
-    (hl-line-mode -1)
-    (display-line-numbers-mode -1))))
+  :hook
+  (vterm-mode . (lambda ()
+                  (hl-line-mode -1)
+                  (display-line-numbers-mode -1))))
 
 (use-package vterm-toggle
   :after vterm
   :config
-(setq vterm-toggle-fullscreen-p nil)
-(add-to-list 'display-buffer-alist
-             '((lambda (buffer-or-name _)
+  (setq vterm-toggle-fullscreen-p nil)
+  (add-to-list 'display-buffer-alist
+               '((lambda (buffer-or-name _)
                    (let ((buffer (get-buffer buffer-or-name)))
                      (with-current-buffer buffer
                        (or (equal major-mode 'vterm-mode)
                            (string-prefix-p vterm-buffer-name (buffer-name buffer))))))
-               (display-buffer-reuse-window display-buffer-in-side-window)
-               (side . right)
-               (dedicated . t) ;dedicated is supported in emacs27
-               (reusable-frames . visible)
-               (window-width . 0.5))))
-
-;; eat
-(use-package eat
-  :custom
-  (eat-term-name "xterm-256color")
-  :config
-  (eat-eshell-mode)
-  (eat-eshell-visual-command-mode)
-:hook
- (vterm-mode . (lambda ()
-    (hl-line-mode -1)
-    (display-line-numbers-mode -1))))
+                 (display-buffer-reuse-window display-buffer-in-side-window)
+                 (side . right)
+                 (dedicated . t) ;dedicated is supported in emacs27
+                 (reusable-frames . visible)
+                 (window-width . 0.5))))
 
 (defun remacs/eshell-config ()
   "Eshell config"
@@ -1127,26 +1124,26 @@ The DWIM behaviour of this command is as follows:
 ;;(setenv "EXA_COLORS" "uu=36:gu=37:sn=32:sb=32:da=34:ur=34:uw=35:ux=36:ue=36:gr=34:gw=35:gx=36:tr=34:tw=35:tx=36:")
 
 (use-package
- eshell-syntax-highlighting
- :after esh-mode
- :config (eshell-syntax-highlighting-global-mode +1))
+  eshell-syntax-highlighting
+  :after esh-mode
+  :config (eshell-syntax-highlighting-global-mode +1))
 
 ;; Programming enhacements
 (use-package iedit :bind ("C-c ." . iedit-mode) :diminish)
 
 (use-package
- rainbow-delimiters
- :defer t
- :init (add-hook 'prog-mode-hook 'rainbow-delimiters-mode))
+  rainbow-delimiters
+  :defer t
+  :init (add-hook 'prog-mode-hook 'rainbow-delimiters-mode))
 
 (use-package
- smartparens
- :ensure t
- :init
- (require 'smartparens-config)
- (smartparens-global-mode t)
- :diminish smartparens-mode
- :config (show-smartparens-mode t))
+  smartparens
+  :ensure t
+  :init
+  (require 'smartparens-config)
+  (smartparens-global-mode t)
+  :diminish smartparens-mode
+  :config (show-smartparens-mode t))
 
 (use-package highlight-parentheses :ensure t)
 
@@ -1159,17 +1156,17 @@ The DWIM behaviour of this command is as follows:
 
 ;; Authentication
 (use-package
- pinentry
- :config (setq epg-pinentry-mode 'loopback) (pinentry-start))
+  pinentry
+  :config (setq epg-pinentry-mode 'loopback) (pinentry-start))
 
 ;; Templates
 (use-package yasnippet
   :ensure t
-  ;:hook ((text-mode
-  ;        prog-mode
-  ;        conf-mode
-  ;        c++-ts-mode
-  ;        snippet-mode) . yas-minor-mode-on)
+                                        ;:hook ((text-mode
+                                        ;        prog-mode
+                                        ;        conf-mode
+                                        ;        c++-ts-mode
+                                        ;        snippet-mode) . yas-minor-mode-on)
   :init
   (setq yas-snippet-dir "~/.emacs.d/snippets")
   :config
@@ -1198,7 +1195,7 @@ The DWIM behaviour of this command is as follows:
   (font-lock-add-keywords
    'org-mode
    '(("^ *\\([-]\\) " (0 (prog1 ()
-           (compose-region (match-beginning 1) (match-end 1) "•"))))))
+                           (compose-region (match-beginning 1) (match-end 1) "•"))))))
 
   ;; Set faces for heading levels
   (dolist (face
@@ -1231,33 +1228,33 @@ The DWIM behaviour of this command is as follows:
 
 ;; org mode
 (use-package
- org
- :hook (org-mode . efs/org-mode-setup)
- :config
- (setq
-  org-ellipsis " ▾"
-  org-hide-emphasis-markers t
-  org-confirm-babel-evaluate nil
-  org-fontify-quote-and-verse-blocks t
-  org-startup-folded 'content
-  org-agenda-start-with-log-mode t
-  org-log-done 'time
-  org-log-into-drawer t)
- (org-babel-do-load-languages
-  'org-babel-load-languages
-  '((emacs-lisp . t)
-    (python . t)
-    (shell . t)
-    (clojure . t)
-    (scheme . t)))
- (efs/org-font-setup))
+  org
+  :hook (org-mode . efs/org-mode-setup)
+  :config
+  (setq
+   org-ellipsis " ▾"
+   org-hide-emphasis-markers t
+   org-confirm-babel-evaluate nil
+   org-fontify-quote-and-verse-blocks t
+   org-startup-folded 'content
+   org-agenda-start-with-log-mode t
+   org-log-done 'time
+   org-log-into-drawer t)
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+     (python . t)
+     (shell . t)
+     (clojure . t)
+     (scheme . t)))
+  (efs/org-font-setup))
 
 ;; custom bullets
 (use-package
- org-bullets
- :after org
- :hook (org-mode . org-bullets-mode)
- :custom (org-bullets-bullet-list '("◉" "○" "✸" "○" "●" "○" "●")))
+  org-bullets
+  :after org
+  :hook (org-mode . org-bullets-mode)
+  :custom (org-bullets-bullet-list '("◉" "○" "✸" "○" "●" "○" "●")))
 
 (defun efs/org-mode-visual-fill ()
   (setq
@@ -1266,8 +1263,8 @@ The DWIM behaviour of this command is as follows:
   (visual-fill-column-mode 1))
 
 (use-package
- visual-fill-column
- :hook (org-mode . efs/org-mode-visual-fill))
+  visual-fill-column
+  :hook (org-mode . efs/org-mode-visual-fill))
 
 (setq org-babel-clojure-backend 'cider)
 
@@ -1282,45 +1279,45 @@ The DWIM behaviour of this command is as follows:
 (add-to-list 'org-structure-template-alist '("scm" . "src scheme"))
 
 (use-package
- org-auto-tangle
- :defer t
- :hook (org-mode . org-auto-tangle-mode))
+  org-auto-tangle
+  :defer t
+  :hook (org-mode . org-auto-tangle-mode))
 
 (use-package
- org-roam
- :ensure t
- :init (setq org-roam-v2-ack t)
- :custom
- (org-roam-directory "~/Notes/Roam/")
- (org-roam-completion-everywhere t)
- (org-roam-dailies-capture-templates
-  '(("d" "default" entry "* %<%I:%M %p>: %?"
-     :if-new
-     (file+head "%<%Y-%m-%d>.org" "#+title: %<%Y-%m-%d>\n"))))
- :bind
- (("C-c n l" . org-roam-buffer-toggle)
-  ("C-c n f" . org-roam-node-find)
-  ("C-c n i" . org-roam-node-insert)
-  :map
-  org-mode-map
-  ("C-M-i" . completion-at-point)
-  :map
-  org-roam-dailies-map
-  ("Y" . org-roam-dailies-capture-yesterday)
-  ("T" . org-roam-dailies-capture-tomorrow))
- :bind-keymap ("C-c n d" . org-roam-dailies-map)
- :config
- (require 'org-roam-dailies) ;; Ensure the keymap is available
- (org-roam-db-autosync-mode))
+  org-roam
+  :ensure t
+  :init (setq org-roam-v2-ack t)
+  :custom
+  (org-roam-directory "~/Notes/Roam/")
+  (org-roam-completion-everywhere t)
+  (org-roam-dailies-capture-templates
+   '(("d" "default" entry "* %<%I:%M %p>: %?"
+      :if-new
+      (file+head "%<%Y-%m-%d>.org" "#+title: %<%Y-%m-%d>\n"))))
+  :bind
+  (("C-c n l" . org-roam-buffer-toggle)
+   ("C-c n f" . org-roam-node-find)
+   ("C-c n i" . org-roam-node-insert)
+   :map
+   org-mode-map
+   ("C-M-i" . completion-at-point)
+   :map
+   org-roam-dailies-map
+   ("Y" . org-roam-dailies-capture-yesterday)
+   ("T" . org-roam-dailies-capture-tomorrow))
+  :bind-keymap ("C-c n d" . org-roam-dailies-map)
+  :config
+  (require 'org-roam-dailies) ;; Ensure the keymap is available
+  (org-roam-db-autosync-mode))
 
 ;; Convenient key definitions
 (use-package
- general
- :config
- (general-create-definer
-  remacs/major-mode-leader-map
-  :prefix "s-c")
- (general-create-definer remacs/ctrl-c-definer :prefix "C-c"))
+  general
+  :config
+  (general-create-definer
+    remacs/major-mode-leader-map
+    :prefix "s-c")
+  (general-create-definer remacs/ctrl-c-definer :prefix "C-c"))
 
 (use-package
   deft
@@ -1330,10 +1327,10 @@ The DWIM behaviour of this command is as follows:
                 deft-extensions '("md" "org" "txt" "tex")))
 
 (use-package doc-view
-    :custom
-    (doc-view-resolution 300)
-    (doc-view-mupdf-use-svg t)
-    (large-file-warning-threshold (* 50 (expt 2 20))))
+  :custom
+  (doc-view-resolution 300)
+  (doc-view-mupdf-use-svg t)
+  (large-file-warning-threshold (* 50 (expt 2 20))))
 
 (use-package
   transmission
@@ -1349,8 +1346,8 @@ The DWIM behaviour of this command is as follows:
   :ensure t
   :hook
   (nov-mode . (lambda ()
-    (hl-line-mode -1)
-    (display-line-numbers-mode -1)))
+                (hl-line-mode -1)
+                (display-line-numbers-mode -1)))
   :config
   (setq nov-unzip-program (executable-find "bsdtar")
         nov-unzip-args '("-xC" directory "-f" filename)
@@ -1388,42 +1385,37 @@ The DWIM behaviour of this command is as follows:
   ;; load default config
   (require 'smartparens-config))
 
-(use-package devil
-  :ensure t
-  :demand t
-  :config
-  (global-devil-mode 1)
-  (setq override-text-conversion-style nil))
-
-(use-package pdf-tools
-  :ensure t
+(use-package 
+  pdf-tools 
   :magic ("%PDF" . pdf-view-mode)
+  :bind (:map pdf-view-mode-map
+              ("C-s" . isearch-forward)
+              ("C-g" . pdf-view-goto-page)
+              ("C-c C-a h" . pdf-annot-add-highlight-markup-annotation)
+              ("C-c C-a t" . pdf-annot-add-text-annotation)
+              ("C-c C-a d" . pdf-annot-delete)
+              ("C-c C-a x"   . remacs/pdf-toggle-dark-mode))
+  :ensure t
+  :hook
+  (pdf-view-mode . (lambda ()
+                     (hl-line-mode -1)
+                     (display-line-numbers-mode -1)))
+
   :config
-  (pdf-tools-install)
-  (setq-default pdf-view-display-size 'fit-width)
+  (pdf-tools-install :no-query) 
+  (setq-default pdf-view-display-size 'fit-page)
   (setq pdf-annot-activate-created-annotations t)
+  (add-hook 'pdf-view-mode-hook (lambda () (remacs/pdf-toggle-dark-mode))))
 
-  ;; Enable midnight mode (dark background) by default
-  (setq pdf-view-midnight-colors '("#ffffff" . "#000000")) ; white text on black bg
-  (add-hook 'pdf-view-mode-hook #'pdf-view-midnight-minor-mode)
-
-  ;; Keybindings
-  (define-key pdf-view-mode-map (kbd "C-s") 'isearch-forward)
-  (define-key pdf-view-mode-map (kbd "C-c C-a h") 'pdf-annot-add-highlight-markup-annotation)
-  (define-key pdf-view-mode-map (kbd "C-c C-a t") 'pdf-annot-add-text-annotation)
-  (define-key pdf-view-mode-map (kbd "C-c C-a d") 'pdf-annot-delete))
-
-;; Optional: Toggle Midnight Mode manually
-(defun my/pdf-toggle-dark-mode ()
+;;; My functions
+(defun remacs/pdf-toggle-dark-mode ()
   "Toggle PDF midnight mode (dark mode)."
   (interactive)
   (if (bound-and-true-p pdf-view-midnight-minor-mode)
       (pdf-view-midnight-minor-mode -1)
-    (pdf-view-midnight-minor-mode 1)))
+    (setq pdf-view-midnight-colors '("#c8d3f5" . "#191a2a"))
+    (pdf-view-midnight-minor-mode)))
 
-(global-set-key (kbd "<f8>") 'my/pdf-toggle-dark-mode)
-
-;;; My functions
 (defun remacs/smart-open-line-above ()
   "Insert an empty line above the current line.
 Position the cursor at it's beginning, according to the current mode."
@@ -1805,6 +1797,5 @@ Position the cursor at its beginning, according to the current mode."
   "t" '(vterm-toggle :which-key "terminal")
   "r" '(ielm :which-key "emacs REPL")
   )
-
 
 ;;; init.el ends here
