@@ -41,6 +41,8 @@
         ("nongnu" . "https://elpa.nongnu.org/nongnu/")
         ("org"    . "https://orgmode.org/elpa/")))
 
+(setq package-native-compile t)
+
 ;; Initialize only if not already done
 (unless (bound-and-true-p package--initialized)
   (package-initialize))
@@ -740,6 +742,7 @@
         ((c-ts-mode
           c++-ts-mode
           rust-ts-mode
+          rustic-mode
           go-ts-mode
           clojure-mode
           python-base-mode) . lsp-deferred))
@@ -866,17 +869,19 @@
 
 ;; Rust
 (use-package
-  rust-ts-mode
-  :defer t
-  :init
-  :mode "\\.rs\\'"
-  :custom
-  (rust-mode-treesitter-derive t)
-  (rust-format-on-save t))
+ rust-ts-mode
+ :defer t
+ :init
+ :mode "\\.rs\\'")
 
-(use-package cargo
+(use-package rustic
   :ensure t
-  :hook (rust-mode . cargo-minor-mode))
+  :init
+  (setq rustic-major-mode 'rust-ts-mode)
+  :config
+  (setq rustic-format-on-save t)
+  :custom
+  (rustic-cargo-use-last-stored-arguments t))
 
 ;;; markdown
 (use-package
@@ -1014,11 +1019,20 @@
               ("M-n" . flycheck-next-error) ; optional but recommended error navigation
               ("M-p" . flycheck-previous-error)))
 
+(use-package bash-ts-mode
+  :ensure nil
+  :mode ("\\.sh\\'" "\\.bash\\'" "\\.zsh\\'" "\\.command\\'")
+  :hook (bash-ts-mode . eglot-ensure)
+  :config
+  (setq bash-ts-mode-indent-offset 2
+        sh-basic-offset 2
+        indent-tabs-mode nil))
+
 (use-package
   shfmt
   :defer t
   :hook
-  (sh-mode . (lambda () (shfmt-on-save-mode))))
+  (bash-ts--mode . (lambda () (shfmt-on-save-mode))))
 
 (use-package ielm
   :config
