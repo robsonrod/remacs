@@ -103,13 +103,12 @@
       use-package-compute-statistics nil)
 
 ;; Optional: GC tuning for faster startup
-;; Optimize GC during startup
 (setq read-process-output-max (* 10 1024 1024)) ;; 10mb
 (setq gc-cons-threshold #x40000000)  ;; 1GB
 (setq gc-cons-percentage 0.6)
 (add-hook 'emacs-startup-hook
           (lambda ()
-            (setq gc-cons-threshold (* 80 1024 1024)))) ;; 50MB after startup
+            (setq gc-cons-threshold (* 80 1024 1024))))
 
 (message "✅ Package system initialized successfully.")
 
@@ -143,7 +142,8 @@
   :custom
   ;; General UI and behavior
   (inhibit-startup-message t)
-  (indent-tabs-mode nil) ; use spaces instead of tabs
+  (initial-scratch-message "")
+  (indent-tabs-mode nil)                ; use spaces instead of tabs
   (ring-bell-function 'ignore)
   (history-length 20)
   (use-dialog-box nil)
@@ -199,6 +199,7 @@
   (winner-mode 1)
   (global-prettify-symbols-mode 1)
   (auto-save-visited-mode 1)
+  (recentf-mode 1)
   (add-hook
    'emacs-startup-hook
    (lambda ()
@@ -220,7 +221,7 @@
     (add-hook mode (lambda () (display-line-numbers-mode -1)))))
 
 (use-package window
-  :ensure nil       ;; This is built-in, no need to fetch it.
+  :ensure nil
   :custom
   (display-buffer-alist
    '(
@@ -233,7 +234,7 @@
      ("\\*\\(Compile-Log\\)\\*"
       (display-buffer-no-window)
       (allow-no-window . t))
-     
+
      ;; Example configuration for the LSP help buffer,
      ;; keeps it always on bottom using 25% of the available space:
      ("\\*\\(lsp-help\\)\\*"
@@ -248,8 +249,17 @@
       (display-buffer-in-side-window)
       (window-height . 0.25)
       (side . bottom)
-      (slot . 1))
-     )))
+      (slot . 1)))))
+
+(use-package isearch
+  :ensure nil
+  :config
+  (setq isearch-lazy-count t)
+  (setq lazy-count-prefix-format "(%s/%s) ")
+  (setq lazy-count-suffix-format nil)
+  (setq search-whitespace-regexp ".*?")
+  :bind (("C-s" . isearch-forward)
+         ("C-r" . isearch-backward)))
 
 (use-package modus-themes
   :ensure t
@@ -357,7 +367,7 @@
      `(log-view-message ((,c :foreground "#b4befe")))
      `(match ((,c :background "#3e5768" :foreground "#cdd6f5")))
      `(modus-themes-search-current ((,c :background "#f38ba8" :foreground "#11111b" ))) ;; :foreground "#cdd6f4" -- Catppuccin default, not that visible...
-     `(modus-themes-search-lazy ((,c :background "#3e5768" :foreground "#cdd6f5")))     ;; :foreground "#cdd6f4" :background "#94e2d5" -- Catppuccin default, not that visible...
+     `(modus-themes-search-lazy ((,c :background "#3e5768" :foreground "#cdd6f5"))) ;; :foreground "#cdd6f4" :background "#94e2d5" -- Catppuccin default, not that visible...
      `(newsticker-extra-face ((,c :foreground "#9399b2" :height 0.8 :slant italic)))
      `(newsticker-feed-face ((,c :foreground "#f38ba8" :height 1.2 :weight bold)))
      `(newsticker-treeview-face ((,c :foreground "#cdd6f4")))
@@ -366,9 +376,9 @@
      `(tab-bar-tab ((,c :background "#1e1e2e" :underline t)))
      `(tab-bar-tab-group-current ((,c :background "#1e1e2e" :foreground "#bac2de" :underline t)))
      `(tab-bar-tab-group-inactive ((,c :background "#1e1e2e" :foreground "#9399b2"))))
-     `(tab-bar-tab-inactive ((,c :background "#1e1e2e" :foreground "#a6adc8")))
-     `(vc-dir-file ((,c :foreground "#89b4fa")))
-     `(vc-dir-header-value ((,c :foreground "#b4befe"))))
+    `(tab-bar-tab-inactive ((,c :background "#1e1e2e" :foreground "#a6adc8")))
+    `(vc-dir-file ((,c :foreground "#89b4fa")))
+    `(vc-dir-header-value ((,c :foreground "#b4befe"))))
   :init
   (load-theme 'modus-vivendi-tinted t))
 
@@ -406,14 +416,14 @@
   doom-modeline
   :ensure t
   :init (doom-modeline-mode 1)
-  :custom ((doom-modeline-height 15) 
-           (doom-modeline-bar-width 6) 
-           (doom-modeline-lsp t) 
-           (doom-modeline-persp-name nil) 
-           (doom-modeline-irc nil) 
-           (doom-modeline-mu4e nil) 
-           (doom-modeline-minor-modes t) 
-           (doom-modeline-buffer-file-name-style 'truncate-except-project) 
+  :custom ((doom-modeline-height 15)
+           (doom-modeline-bar-width 6)
+           (doom-modeline-lsp t)
+           (doom-modeline-persp-name nil)
+           (doom-modeline-irc nil)
+           (doom-modeline-mu4e nil)
+           (doom-modeline-minor-modes t)
+           (doom-modeline-buffer-file-name-style 'truncate-except-project)
            (doom-modeline-major-mode-icon t)))
 
 ;; Remember to do M-x and run `nerd-icons-install-fonts' to get the
@@ -511,7 +521,9 @@
 
 (use-package
   savehist
-  :ensure nil ; it is built-in
+  :ensure nil
+  :config
+  (setq history-length 25)
   :hook (after-init . savehist-mode))
 
 (use-package corfu
@@ -830,9 +842,8 @@
    lsp-ui-doc-glance)
   :bind (:map lsp-mode-map
               ("C-c C-d" . 'lsp-ui-doc-glance))
-  :after (lsp-mode evil)
+  :after lsp-mode
   :config (setq lsp-ui-doc-enable t
-                evil-lookup-func #'lsp-ui-doc-glance 
                 lsp-ui-doc-show-with-cursor nil      
                 lsp-ui-doc-include-signature t       
                 lsp-ui-doc-position 'at-point))
@@ -900,10 +911,15 @@
 
 (use-package markdown-preview-mode :commands markdown-preview)
 
-;; Elisp
-(use-package lispy
-  :hook ((emacs-lisp-mode . lispy-mode)
-         (scheme-mode . lispy-mode)))
+(use-package
+  emacs-lisp-mode
+  :ensure nil
+  :bind (:map emacs-lisp-mode-map
+              ("C-c C-r" . eval-region)
+              ("C-c C-d" . eval-defun)
+              ("C-c C-b" . eval-buffer)
+              ("C-c C-t" . ielm))
+  :hook ((emacs-lisp-mode . flycheck-mode)))
 
 (use-package eldoc-box
   :ensure t
@@ -1323,15 +1339,6 @@
   :config
   (require 'org-roam-dailies) ;; Ensure the keymap is available
   (org-roam-db-autosync-mode))
-
-;; Convenient key definitions
-(use-package
-  general
-  :config
-  (general-create-definer
-    remacs/major-mode-leader-map
-    :prefix "s-c")
-  (general-create-definer remacs/ctrl-c-definer :prefix "C-c"))
 
 (use-package
   deft
@@ -1759,9 +1766,8 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "M-<up>") #'shrink-window)
 (global-set-key (kbd "M-<right>") #'enlarge-window-horizontally)
 (global-set-key (kbd "M-<left>") #'shrink-window-horizontally)
-
-(global-set-key [(control shift return)] #'remacs/smart-open-line-above)
-(global-set-key [(shift return)] #'remacs/smart-open-line)
+(global-set-key (kbd "C-o") #'remacs/smart-open-line-above)
+(global-set-key (kbd "S-<return>") #'remacs/smart-open-line)
 
 (global-set-key (kbd "C-x K") #'remacs/delete-file-and-buffer)
 (global-set-key (kbd "C-x j") #'dired-jump)
@@ -1779,37 +1785,13 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "M-s M-o") #'ff-get-other-file)
 (global-set-key (kbd "C-c s l") #'sort-lines)
 (global-set-key (kbd "C-c k w") #'remacs/kill-inner-word)
-(global-set-key (kbd "C-c y l") #'remacs/copy-whole-linel)
 
 (global-set-key (kbd "C-c C-q") #'view-mode)
 
-(global-set-key (kbd "C-x g n") #'git-gutter:next-hunk)
-(global-set-key (kbd "C-x g p") #'git-gutter:previous-hunk)
-(global-set-key (kbd "C-x g r") #'git-gutter:revert-hunk)
-(global-set-key (kbd "C-x g v") #'git-gutter:popup-hunk)
+(global-set-key (kbd "C-x g n") 'git-gutter:next-hunk)
+(global-set-key (kbd "C-x g p") 'git-gutter:previous-hunk)
+(global-set-key (kbd "C-x g r") 'git-gutter:revert-hunk)
+(global-set-key (kbd "C-x g v") 'git-gutter:popup-hunk)
 
-(remacs/ctrl-c-definer
-  "=" '(remacs/text-scale-restore :which-key "restore font size")
-  "+" '(text-scale-increase :which-key "increase font size")
-  "-" '(text-scale-decrease :which-key "decrease font size")
-  "a" '(remacs/my-increment-number-at-point :which-key "increment number at point")
-  "x" '(remacs/my-decrement-number-at-point :which-key "decrement number at point"))
-
-(remacs/major-mode-leader-map
-  "c" '(remacs/open-config :which-key "open emacs config")
-  "|" '(remacs/split-window-two :which-key "split into two windows")
-  "s" '(remacs/switch-to-scratch-buffer :which-key "goto scratch buffer")
-  "m" '(remacs/switch-to-message-buffer :which-key "goto message buffer")
-  "l" '(remacs/kill-line :which-key "kill current line")
-  "a" '(remacs/kill-all-buffers :which-key "kill all open buffers")
-  "k" '(remacs/kill-current-buffer :which-key "kill current buffer")
-  "K" '(remacs/delete-file-and-buffer :which-key "delete file and buffer")
-  "R" '(rename-visited-file :which-key "rename visited file")
-  "i" '(auto-insert :which-key "auto insert content from template"))
-
-(remacs/major-mode-leader-map
-  "t" '(vterm-toggle :which-key "terminal")
-  "r" '(ielm :which-key "emacs REPL")
-  )
 
 ;;; init.el ends here
