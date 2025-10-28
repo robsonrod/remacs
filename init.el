@@ -1702,11 +1702,55 @@ Position the cursor at its beginning, according to the current mode."
   (prefer-coding-system 'utf-8)
   (define-coding-system-alias 'UTF-8 'utf-8))
 
-(setq path-to-ctags "etags")
-(defun remacs/create-tags(dirname)
-  "Create tags file to a project"
-  (interactive "DDirectory: ")
-  (shell-command (format "find %s -type f -iname \"*.c\" -o -iname \"*.h\" -o -iname \"*.cpp\" -o -iname \"*.hpp\" -o -iname \"*.inc\" | xargs %s -a" (directory-file-name dirname) path-to-ctags)))
+;; --- Incrementally update TAGS when saving C/C++ files ---
+(defun remacs/find-project-root ()
+  "Find project root directory (by looking for TAGS or .git)."
+  (or (locate-dominating-file default-directory "TAGS")
+      (locate-dominating-file default-directory ".git")
+      default-directory))
+
+(defun remacs/update-etags-for-file ()
+  "Incrementally update TAGS for the current buffer’s file."
+  (when (and buffer-file-name
+             (derived-mode-p 'c-mode 'c++-mode))
+    (let* ((project-root (remacs/find-project-root))
+           (tag-file (expand-file-name "TAGS" project-root))
+           (cmd (format "etags -a -o %s %s"
+                        (shell-quote-argument tag-file)
+                        (shell-quote-argument buffer-file-name))))
+      (message "Updating TAGS incrementally for %s..." buffer-file-name)
+      (start-process-shell-command "etags-update" "*etags-output*" cmd)
+      (when (file-exists-p tag-file)
+        (visit-tags-table tag-file))
+      (message "TAGS updated for %s" buffer-file-name))))
+
+(defun remacs/setup-cpp-etags-auto-update ()
+  "Set up automatic incremental TAGS updates on save for C/C++."
+  (when (derived-mode-p 'c-mode 'c++-mode)
+    (add-hook 'after-save-hook #'remacs/update-etags-for-file nil t)))
+
+(add-hook 'c-mode-hook #'remacs/setup-cpp-etags-auto-update)
+(add-hook 'c++-mode-hook #'remacs/setup-cpp-etags-auto-update)
+
+(defun remacs/create-etags (dir)
+  "Generate TAGS file for all C/C++ files under DIR."
+  (interactive "DProject root directory: ")
+  (let* ((default-directory (file-name-as-directory dir))
+         (tag-file (expand-file-name "TAGS" default-directory))
+         (cmd (format "find %s -type f \\( -name \"*.cpp\" -o -name \"*.cxx\" -o -name \"*.cc\" -o -name \"*.c\" -o -name \"*.hpp\" -o -name \"*.hh\" -o -name \"*.h\" \\) -print | etags -o %s -"
+                      (shell-quote-argument default-directory)
+                      (shell-quote-argument tag-file))))
+    (message "Generating full TAGS in %s..." default-directory)
+    (start-process-shell-command "etags-gen" "*etags-output*" cmd)
+    (visit-tags-table tag-file)
+    (message "Full TAGS generated successfully at %s" tag-file)))
+
+
+;; (setq path-to-ctags "etags")
+;; (defun remacs/create-tags(dirname)
+;;   "Create tags file to a project"
+;;   (interactive "DDirectory: ")
+;;   (shell-command (format "find %s -type f -iname \"*.c\" -o -iname \"*.h\" -o -iname \"*.cpp\" -o -iname \"*.hpp\" -o -iname \"*.inc\" | xargs %s -a" (directory-file-name dirname) path-to-ctags)))
 
 (defun sim-vi-w (&optional arg)
   "Simulate Vi's \"w\" behavior."
