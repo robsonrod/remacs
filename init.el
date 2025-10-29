@@ -918,8 +918,7 @@
               ("C-c C-r" . eval-region)
               ("C-c C-d" . eval-defun)
               ("C-c C-b" . eval-buffer)
-              ("C-c C-t" . ielm))
-  :hook ((emacs-lisp-mode . flycheck-mode)))
+              ("C-c C-t" . ielm)))
 
 (use-package eldoc-box
   :ensure t
@@ -937,11 +936,6 @@
 
 ;; ssh
 (use-package ssh-config-mode :defer t)
-
-;; direnv
-(use-package
-  envrc
-  :hook (after-init . envrc-global-mode))
 
 ;; toml
 (use-package
@@ -972,13 +966,11 @@
   cmake-mode
   :hook (cmake-mode . lsp-deferred))
 
-(use-package clipetty
-  :ensure t
-  :hook (after-init . global-clipetty-mode)
-  :bind ("M-w" . clipetty-kill-ring-save))
-
-;; pyenv
-(use-package pyvenv :config (pyvenv-mode 1))
+(unless (display-graphic-p)
+  (use-package clipetty
+    :ensure t
+    :hook (after-init . global-clipetty-mode)
+    :bind ("M-w" . clipetty-kill-ring-save)))
 
 ;; clojure check
 (use-package flycheck-clj-kondo)
