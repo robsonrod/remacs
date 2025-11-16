@@ -160,6 +160,7 @@
   (vc-follow-symlinks t)
   (show-paren-style 'mixed)
   (treesit-font-lock-level 4)
+  (browse-url-browser-function 'eww-browse-url)
   
   ;; Backup and autosave
   (backup-directory-alist '(("." . "~/.emacs.d/backup")))
@@ -217,7 +218,11 @@
              shell-mode-hook
              eshell-mode-hook
              dired-mode-hook
-             pdf-view-mode-hook))
+             pdf-view-mode-hook
+             elfeed-show-mode-hook
+             dirvish-special-preview-mode-hook
+             dirvish-directory-view-mode-hook
+             eww-mode-hook))
     (add-hook mode (lambda () (display-line-numbers-mode -1)))))
 
 (use-package window
@@ -405,26 +410,17 @@
   :ensure nil
   :hook (after-init . delete-selection-mode))
 
-;; modeline icons
-(use-package
-  minions
-  :init
-  :hook (doom-modeline-mode . minions-mode))
+(use-package keycast
+  :hook (after-init . keycast-mode)
+  :config
+  (define-minor-mode keycast-mode
+	"Show current command and its key binding in the mode line (fix for use with doom-modeline)."
+	:global t
+	(if keycast-mode
+		(add-hook 'pre-command-hook 'keycast--update t)
+      (remove-hook 'pre-command-hook 'keycast--update)))
 
-;; doom modeline
-(use-package
-  doom-modeline
-  :ensure t
-  :init (doom-modeline-mode 1)
-  :custom ((doom-modeline-height 15)
-           (doom-modeline-bar-width 6)
-           (doom-modeline-lsp t)
-           (doom-modeline-persp-name nil)
-           (doom-modeline-irc nil)
-           (doom-modeline-mu4e nil)
-           (doom-modeline-minor-modes t)
-           (doom-modeline-buffer-file-name-style 'truncate-except-project)
-           (doom-modeline-major-mode-icon t)))
+  (add-to-list 'global-mode-string '("" keycast-mode-line)))
 
 ;; Remember to do M-x and run `nerd-icons-install-fonts' to get the
 ;; font files.  Then restart Emacs to see the effect.
@@ -478,8 +474,8 @@
   :after vertico
   :ensure t
   :bind
-  (("C-c ," . embark-act) ; pick some comfortable binding
-   ("C-c ;" . embark-dwim) ; good alternative: M-.
+  (("C-." . embark-act) ; pick some comfortable binding
+   ("C-;" . embark-dwim) ; good alternative: M-.
    ("C-h B" . embark-bindings)) ; alternative for `describe-bindings'
   :init
   ;; Optionally replace the key help with a completing-read interface
@@ -500,14 +496,16 @@
 (use-package
   consult
   :bind
-  (
-   ("C-c h" . 'consult-isearch-backward)
+  (("C-c h" . 'consult-isearch-backward)
    ("C-x C-b" . 'consult-buffer)
    ("M-g o" . 'consult-outline)
    ("M-g M-g" . 'consult-goto-line)
    ("M-s M-g" . 'consult-grep)
    ("M-s M-r" . 'consult-ripgrep)
-   ("M-s i" . 'consult-imenu))
+   ("M-s M-i" . 'consult-imenu)
+   ("M-s M-f" . 'consult-find)
+   ("M-s M-l" . 'consult-line)
+   ("M-s M-h" . 'consult-recent-file))
   :custom
   (completion-in-region-function #'consult-completion-in-region))
 
@@ -525,6 +523,22 @@
   :config
   (setq history-length 25)
   :hook (after-init . savehist-mode))
+
+(use-package recentf
+  :ensure nil
+  :init
+  (setq recentf-save-file (expand-file-name "recentf" user-emacs-directory))
+  (setq recentf-max-saved-items 100)
+  (setq recentf-max-menu-items 25) ; I don't use the `menu-bar-mode', but this is good to know
+  (setq recentf-save-file-modes nil)
+  (setq recentf-keep nil)
+  (setq recentf-auto-cleanup nil)
+  (setq recentf-initialize-file-name-history nil)
+  (setq recentf-filename-handlers nil)
+  (setq recentf-show-file-shortcuts-flag nil)
+  (setq recentf-exclude '(".*\\.tmp$" "/tmp/" ".*recentf$"))
+  :config
+  (recentf-mode 1))
 
 (use-package corfu
   :ensure t
@@ -567,7 +581,14 @@
   (unless (display-graphic-p)
     (corfu-terminal-mode +1)))
 
-(use-package wgrep :after consult :hook (grep-mode . wgrep-setup))
+(use-package wgrep
+  :ensure t
+  :after consult
+  :hook (grep-mode . wgrep-setup)
+  :config
+  (setq wgrep-enable-key "r")
+  (setq wgrep-auto-save-buffer t)
+  (setq wgrep-change-readonly-file t))
 
 (use-package
   consult-dir
@@ -581,12 +602,12 @@
 
 (use-package
   avy
+  :bind
+  (("C-:" . avy-goto-char)
+   ("C-M-:" . avy-goto-char2))
   :config
-  (global-set-key (kbd "C-c j") #'avy-goto-char-timer)
-  (global-set-key (kbd "C-c w") #'avy-goto-word-or-subword-1)
-  (global-set-key (kbd "C-c g") #'avy-goto-line)
-  (setq avy-background t)
-  (setq avy-timeout-seconds 0.2)) 
+  (setq avy-background t
+        avy-timeout-seconds 0.2))
 
 ;;; Helpers
 (use-package
@@ -650,6 +671,50 @@
   (setq trashed-sort-key '("Date deleted" . t))
   (setq trashed-date-format "%Y-%m-%d %H:%M:%S"))
 
+(use-package dirvish
+  :ensure t
+  :init
+  (dirvish-override-dired-mode)
+  :custom
+  (dirvish-quick-access-entries ; It's a custom option, `setq' won't work
+   '(("h" "~/"                          "Home")
+     ("d" "~/Downloads/"                "Downloads")
+     ("m" "/mnt/"                       "Drives")
+     ))
+  :config
+  (dirvish-peek-mode)             
+  (dirvish-side-follow-mode)      
+  (setq dirvish-mode-line-format
+   '(:left (sort file-time " " file-size symlink) :right (omit yank index)))
+  (setq dirvish-attributes '(file-modes nerd-icons file-size  collapse vc-state subtree-state  git-msg file-time))
+  (setq dirvish-large-directory-threshold 20000)
+  (setq dired-dwim-target         t
+        dired-recursive-copies    'always
+        dired-recursive-deletes   'top
+        delete-by-moving-to-trash t
+        )
+  :bind ; Bind `dirvish-fd|dirvish-side|dirvish-dwim' as you see fit
+  (("C-x C-j" . dirvish)
+   ("C-x j" . dirvish-dwin)
+   :map dirvish-mode-map               ; Dirvish inherits `dired-mode-map'
+   (";"   . dired-up-directory)        ; So you can adjust `dired' bindings here
+   ("?"   . dirvish-dispatch)          ; [?] a helpful cheatsheet
+   ("a"   . dirvish-setup-menu)        ; [a]ttributes settings:`t' toggles mtime, `f' toggles fullframe, etc.
+   ("f"   . dirvish-file-info-menu)    ; [f]ile info
+   ("o"   . dirvish-quick-access)      ; [o]pen `dirvish-quick-access-entries'
+   ("s"   . dirvish-quicksort)         ; [s]ort flie list
+   ("r"   . dirvish-history-jump)      ; [r]ecent visited
+   ("l"   . dirvish-ls-switches-menu)  ; [l]s command flags
+   ("v"   . dirvish-vc-menu)           ; [v]ersion control commands
+   ("*"   . dirvish-mark-menu)
+   ("y"   . dirvish-yank-menu)
+   ("N"   . dirvish-narrow)
+   ("^"   . dirvish-history-last)
+   ("TAB" . dirvish-subtree-toggle)
+   ("M-f" . dirvish-history-go-forward)
+   ("M-b" . dirvish-history-go-backward)
+   ("M-e" . dirvish-emerge-menu)))
+
 ;;; Named workspaces
 (use-package
   perspective
@@ -691,7 +756,7 @@
 ;; Git support
 (use-package
   magit
-  :bind ("C-M-;" . magit-status)
+  :bind ("C-x g" . magit-status)
   :commands (magit-status magit-get-current-branch)
   :custom
   (magit-display-buffer-function
@@ -850,6 +915,20 @@
 
 
 (use-package consult-lsp :init :defer t :after lsp)
+
+(use-package diminish
+  :init
+  (diminish 'abbrev-mode)
+  (diminish 'buffer-face-mode)
+  (diminish 'flyspell-mode)
+  (diminish 'org-indent-mode)
+  (diminish 'org-cdlatex-mode)
+  (diminish 'visual-line-mode)
+  (diminish 'buffer-face-mode)
+  (diminish 'highlight-indent-guides-mode)
+  (diminish 'eldoc-mode)
+  (diminish 'subword-mode)
+  (diminish 'flycheck-mode))
 
 (use-package crux
   :ensure t)
@@ -1346,29 +1425,8 @@
   (large-file-warning-threshold (* 50 (expt 2 20))))
 
 (use-package
-  transmission
-  :defer t
-  :ensure t)
-
-(use-package
   transient
   :defer t)
-
-(use-package
-  nov
-  :ensure t
-  :hook
-  (nov-mode . (lambda ()
-                (hl-line-mode -1)
-                (display-line-numbers-mode -1)))
-  :config
-  (setq nov-unzip-program (executable-find "bsdtar")
-        nov-unzip-args '("-xC" directory "-f" filename)
-        nov-text-width t
-        visual-fill-column-center-text t)
-  (add-hook 'nov-mode-hook 'visual-line-mode)
-  (add-hook 'nov-mode-hook 'visual-fill-column-mode)
-  (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode)))
 
 (setq auto-insert-directory (expand-file-name "auto-insert/" user-emacs-directory))
 (define-auto-insert "\.cpp" "template.cpp")
@@ -1398,6 +1456,23 @@
   ;; load default config
   (require 'smartparens-config))
 
+;; Writing packages
+(use-package
+  nov
+  :ensure t
+  :hook
+  (nov-mode . (lambda ()
+                (hl-line-mode -1)
+                (display-line-numbers-mode -1)))
+  :config
+  (setq nov-unzip-program (executable-find "bsdtar")
+        nov-unzip-args '("-xC" directory "-f" filename)
+        nov-text-width t
+        visual-fill-column-center-text t)
+  (add-hook 'nov-mode-hook 'visual-line-mode)
+  (add-hook 'nov-mode-hook 'visual-fill-column-mode)
+  (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode)))
+
 (use-package 
   pdf-tools 
   :magic ("%PDF" . pdf-view-mode)
@@ -1420,6 +1495,26 @@
   (setq pdf-annot-activate-created-annotations t)
   (add-hook 'pdf-view-mode-hook (lambda () (remacs/pdf-toggle-dark-mode))))
 
+(use-package elfeed
+  :custom
+  (elfeed-db-directory
+   (expand-file-name "elfeed" user-emacs-directory))
+  (elfeed-show-entry-switch 'display-buffer)
+  :bind
+  ("C-c w e" . elfeed))
+
+(use-package elfeed-org
+    :config
+    (elfeed-org)
+    :custom
+    (rmh-elfeed-org-files (list "~/Documents/elfeed.org")))
+
+(use-package org-web-tools
+  :bind
+  (("C-c w w" . org-web-tools-insert-link-for-url)))
+
+;; end writing
+
 ;;; My functions
 (defun remacs/pdf-toggle-dark-mode ()
   "Toggle PDF midnight mode (dark mode)."
@@ -1428,27 +1523,6 @@
       (pdf-view-midnight-minor-mode -1)
     (setq pdf-view-midnight-colors '("#c8d3f5" . "#191a2a"))
     (pdf-view-midnight-minor-mode)))
-
-(defun remacs/smart-open-line-above ()
-  "Insert an empty line above the current line.
-Position the cursor at it's beginning, according to the current mode."
-  (interactive)
-  (move-beginning-of-line nil)
-  (newline-and-indent)
-  (forward-line -1)
-  (indent-according-to-modee))
-
-(defun remacs/smart-open-line ()
-  "Insert an empty line after the current line.
-Position the cursor at its beginning, according to the current mode."
-  (interactive)
-  (move-end-of-line nil)
-  (newline-and-indent))
-
-(defun remacs/open-config ()
-  "Open Emacs config file."
-  (interactive)
-  (find-file (expand-file-name "init.el" user-emacs-directory)))
 
 (defun remacs/reload-config ()
   "Reload Emacs config file."
@@ -1795,6 +1869,12 @@ Position the cursor at its beginning, according to the current mode."
           (backward-char))))))
 
 ;; Remap
+(global-set-key [remap keyboard-quit] #'crux-keyboard-quit-dwim)
+(global-set-key [remap move-beginning-of-line] #'crux-move-beginning-of-line)
+(global-set-key (kbd "C-k") #'crux-smart-kill-line)
+(global-set-key (kbd "C-S-k") #'crux-kill-line-backwards)
+(global-set-key (kbd "C-o") #'crux-smart-open-line)
+(global-set-key (kbd "C-S-o") #'crux-smart-open-line-above)
 (global-set-key (kbd "M-f") #'sim-vi-w)
 (global-set-key (kbd "M-b") #'sim-vi-b)
 (global-set-key (kbd "C-<tab>") #'other-window)
@@ -1802,12 +1882,12 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "M-<up>") #'shrink-window)
 (global-set-key (kbd "M-<right>") #'enlarge-window-horizontally)
 (global-set-key (kbd "M-<left>") #'shrink-window-horizontally)
-(global-set-key (kbd "C-o") #'remacs/smart-open-line-above)
-(global-set-key (kbd "S-<return>") #'remacs/smart-open-line)
+(global-set-key (kbd "C-x c i") #'crux-find-user-init-file)
+(global-set-key (kbd "C-x c r") #'remacs/reload-config)
 
-(global-set-key (kbd "C-x K") #'remacs/delete-file-and-buffer)
+(global-set-key (kbd "C-c f d") #'remacs/delete-file-and-buffer)
+(global-set-key (kbd "C-c f r") #'rename-visited-file)
 (global-set-key (kbd "C-x j") #'dired-jump)
-(global-set-key (kbd "C-x R") #'rename-visited-file)
 (global-set-key (kbd "C-x C-l") #'downcase-dwim)
 (global-set-key (kbd "C-x C-u") #'upcase-dwim)
 (global-set-key (kbd "C-c K") #'remacs/kill-all-buffers)
@@ -1823,11 +1903,12 @@ Position the cursor at its beginning, according to the current mode."
 (global-set-key (kbd "C-c k w") #'remacs/kill-inner-word)
 
 (global-set-key (kbd "C-c C-q") #'view-mode)
+(define-key global-map (kbd "C-x C-r") #'recentf-open) ; override `find-file-read-only'
 
-(global-set-key (kbd "C-x g n") 'git-gutter:next-hunk)
-(global-set-key (kbd "C-x g p") 'git-gutter:previous-hunk)
-(global-set-key (kbd "C-x g r") 'git-gutter:revert-hunk)
-(global-set-key (kbd "C-x g v") 'git-gutter:popup-hunk)
+(global-set-key (kbd "C-c g n") 'git-gutter:next-hunk)
+(global-set-key (kbd "C-c g p") 'git-gutter:previous-hunk)
+(global-set-key (kbd "C-c g r") 'git-gutter:revert-hunk)
+(global-set-key (kbd "C-c g v") 'git-gutter:popup-hunk)
 
 
 ;;; init.el ends here
