@@ -220,8 +220,6 @@
              dired-mode-hook
              pdf-view-mode-hook
              elfeed-show-mode-hook
-             dirvish-special-preview-mode-hook
-             dirvish-directory-view-mode-hook
              eww-mode-hook))
     (add-hook mode (lambda () (display-line-numbers-mode -1)))))
 
@@ -266,126 +264,10 @@
   :bind (("C-s" . isearch-forward)
          ("C-r" . isearch-backward)))
 
-(use-package modus-themes
+(use-package batppuccin
   :ensure t
-  :custom
-  (modus-themes-italic-constructs t)
-  (modus-themes-bold-constructs t)
-  (modus-themes-mixed-fonts nil)
-  (modus-themes-prompts '(bold intense))
-  (modus-themes-common-palette-overrides
-   `((accent-0 "#89b4fa")
-     (accent-1 "#89dceb")
-     (bg-active bg-main)
-     (bg-added "#364144")
-     (bg-added-refine "#4A5457")
-     (bg-changed "#3e4b6c")
-     (bg-changed-refine "#515D7B")
-     (bg-completion "#45475a")
-     (bg-completion-match-0 "#1e1e2e")
-     (bg-completion-match-1 "#1e1e2e")
-     (bg-completion-match-2 "#1e1e2e")
-     (bg-completion-match-3 "#1e1e2e")
-     (bg-hl-line "#2a2b3d")
-     (bg-hover-secondary "#585b70")
-     (bg-line-number-active unspecified)
-     (bg-line-number-inactive "#1e1e2e")
-     (bg-main "#1e1e2e")
-     (bg-mark-delete "#443245")
-     (bg-mark-select "#3e4b6c")
-     (bg-mode-line-active "#181825")
-     (bg-mode-line-inactive "#181825")
-     (bg-prominent-err "#443245")
-     (bg-prompt unspecified)
-     (bg-prose-block-contents "#313244")
-     (bg-prose-block-delimiter bg-prose-block-contents)
-     (bg-region "#585b70")
-     (bg-removed "#443245")
-     (bg-removed-refine "#574658")
-     (bg-tab-bar      "#1e1e2e")
-     (bg-tab-current  bg-main)
-     (bg-tab-other    "#1e1e2e")
-     (border-mode-line-active nil)
-     (border-mode-line-inactive nil)
-     (builtin "#89b4fa")
-     (comment "#9399b2")
-     (constant  "#f38ba8")
-     (cursor  "#f5e0dc")
-     (date-weekday "#89b4fa")
-     (date-weekend "#fab387")
-     (docstring "#a6adc8")
-     (err     "#f38ba8")
-     (fg-active fg-main)
-     (fg-completion "#cdd6f4")
-     (fg-completion-match-0 "#89b4fa")
-     (fg-completion-match-1 "#f38ba8")
-     (fg-completion-match-2 "#a6e3a1")
-     (fg-completion-match-3 "#fab387")
-     (fg-heading-0 "#f38ba8")
-     (fg-heading-1 "#fab387")
-     (fg-heading-2 "#f9e2af")
-     (fg-heading-3 "#a6e3a1")
-     (fg-heading-4 "#74c7ec")
-     (fg-line-number-active "#b4befe")
-     (fg-line-number-inactive "#7f849c")
-     (fg-link  "#89b4fa")
-     (fg-main "#cdd6f4")
-     (fg-mark-delete "#f38ba8")
-     (fg-mark-select "#89b4fa")
-     (fg-mode-line-active "#bac2de")
-     (fg-mode-line-inactive "#585b70")
-     (fg-prominent-err "#f38ba8")
-     (fg-prompt "#cba6f7")
-     (fg-prose-block-delimiter "#9399b2")
-     (fg-prose-verbatim "#a6e3a1")
-     (fg-region "#cdd6f4")
-     (fnname    "#89b4fa")
-     (fringe "#1e1e2e")
-     (identifier "#cba6f7")
-     (info    "#94e2d5")
-     (keyword   "#cba6f7")
-     (keyword "#cba6f7")
-     (name "#89b4fa")
-     (number "#fab387")
-     (property "#89b4fa")
-     (string "#a6e3a1")
-     (type      "#f9e2af")
-     (variable  "#fab387")
-     (warning "#f9e2af")))
   :config
-  (modus-themes-with-colors
-    (custom-set-faces
-     `(change-log-acknowledgment ((,c :foreground "#b4befe")))
-     `(change-log-date ((,c :foreground "#a6e3a1")))
-     `(change-log-name ((,c :foreground "#fab387")))
-     `(diff-context ((,c :foreground "#89b4fa")))
-     `(diff-file-header ((,c :foreground "#f5c2e7")))
-     `(diff-header ((,c :foreground "#89b4fa")))
-     `(diff-hunk-header ((,c :foreground "#fab387")))
-     `(gnus-button ((,c :foreground "#8aadf4")))
-     `(gnus-group-mail-3 ((,c :foreground "#8aadf4")))
-     `(gnus-group-mail-3-empty ((,c :foreground "#8aadf4")))
-     `(gnus-header-content ((,c :foreground "#7dc4e4")))
-     `(gnus-header-from ((,c :foreground "#cba6f7")))
-     `(gnus-header-name ((,c :foreground "#a6e3a1")))
-     `(gnus-header-subject ((,c :foreground "#8aadf4")))
-     `(log-view-message ((,c :foreground "#b4befe")))
-     `(match ((,c :background "#3e5768" :foreground "#cdd6f5")))
-     `(modus-themes-search-current ((,c :background "#f38ba8" :foreground "#11111b" ))) ;; :foreground "#cdd6f4" -- Catppuccin default, not that visible...
-     `(modus-themes-search-lazy ((,c :background "#3e5768" :foreground "#cdd6f5"))) ;; :foreground "#cdd6f4" :background "#94e2d5" -- Catppuccin default, not that visible...
-     `(newsticker-extra-face ((,c :foreground "#9399b2" :height 0.8 :slant italic)))
-     `(newsticker-feed-face ((,c :foreground "#f38ba8" :height 1.2 :weight bold)))
-     `(newsticker-treeview-face ((,c :foreground "#cdd6f4")))
-     `(newsticker-treeview-selection-face ((,c :background "#3e5768" :foreground "#cdd6f5")))
-     `(tab-bar ((,c :background "#1e1e2e" :foreground "#bac2de")))
-     `(tab-bar-tab ((,c :background "#1e1e2e" :underline t)))
-     `(tab-bar-tab-group-current ((,c :background "#1e1e2e" :foreground "#bac2de" :underline t)))
-     `(tab-bar-tab-group-inactive ((,c :background "#1e1e2e" :foreground "#9399b2"))))
-    `(tab-bar-tab-inactive ((,c :background "#1e1e2e" :foreground "#a6adc8")))
-    `(vc-dir-file ((,c :foreground "#89b4fa")))
-    `(vc-dir-header-value ((,c :foreground "#b4befe"))))
-  :init
-  (load-theme 'modus-vivendi-tinted t))
+  (load-theme 'batppuccin-macchiato t))
 
 (use-package treesit-auto
   :ensure t
@@ -474,8 +356,8 @@
   :after vertico
   :ensure t
   :bind
-  (("C-." . embark-act) ; pick some comfortable binding
-   ("C-;" . embark-dwim) ; good alternative: M-.
+  (("C-c a" . embark-act) ; pick some comfortable binding
+   ("M-." . embark-dwim) ; good alternative: M-.
    ("C-h B" . embark-bindings)) ; alternative for `describe-bindings'
   :init
   ;; Optionally replace the key help with a completing-read interface
@@ -671,50 +553,6 @@
   (setq trashed-sort-key '("Date deleted" . t))
   (setq trashed-date-format "%Y-%m-%d %H:%M:%S"))
 
-(use-package dirvish
-  :ensure t
-  :init
-  (dirvish-override-dired-mode)
-  :custom
-  (dirvish-quick-access-entries ; It's a custom option, `setq' won't work
-   '(("h" "~/"                          "Home")
-     ("d" "~/Downloads/"                "Downloads")
-     ("m" "/mnt/"                       "Drives")
-     ))
-  :config
-  (dirvish-peek-mode)             
-  (dirvish-side-follow-mode)      
-  (setq dirvish-mode-line-format
-   '(:left (sort file-time " " file-size symlink) :right (omit yank index)))
-  (setq dirvish-attributes '(file-modes nerd-icons file-size  collapse vc-state subtree-state  git-msg file-time))
-  (setq dirvish-large-directory-threshold 20000)
-  (setq dired-dwim-target         t
-        dired-recursive-copies    'always
-        dired-recursive-deletes   'top
-        delete-by-moving-to-trash t
-        )
-  :bind ; Bind `dirvish-fd|dirvish-side|dirvish-dwim' as you see fit
-  (("C-x C-j" . dirvish)
-   ("C-x j" . dirvish-dwin)
-   :map dirvish-mode-map               ; Dirvish inherits `dired-mode-map'
-   (";"   . dired-up-directory)        ; So you can adjust `dired' bindings here
-   ("?"   . dirvish-dispatch)          ; [?] a helpful cheatsheet
-   ("a"   . dirvish-setup-menu)        ; [a]ttributes settings:`t' toggles mtime, `f' toggles fullframe, etc.
-   ("f"   . dirvish-file-info-menu)    ; [f]ile info
-   ("o"   . dirvish-quick-access)      ; [o]pen `dirvish-quick-access-entries'
-   ("s"   . dirvish-quicksort)         ; [s]ort flie list
-   ("r"   . dirvish-history-jump)      ; [r]ecent visited
-   ("l"   . dirvish-ls-switches-menu)  ; [l]s command flags
-   ("v"   . dirvish-vc-menu)           ; [v]ersion control commands
-   ("*"   . dirvish-mark-menu)
-   ("y"   . dirvish-yank-menu)
-   ("N"   . dirvish-narrow)
-   ("^"   . dirvish-history-last)
-   ("TAB" . dirvish-subtree-toggle)
-   ("M-f" . dirvish-history-go-forward)
-   ("M-b" . dirvish-history-go-backward)
-   ("M-e" . dirvish-emerge-menu)))
-
 ;;; Named workspaces
 (use-package
   perspective
@@ -851,6 +689,9 @@
   (lsp-completion-show-detail nil)
   (lsp-completion-show-kind nil)
   (lsp-headerline-breadcrumb-enable nil)
+  (lsp-ui-doc-show-with-mouse nil)
+  (lsp-ui-doc-enable nil)
+
   :preface
   (defun lsp-booster--advice-json-parse (old-fn &rest args)
     "Try to parse bytecode instead of json."
@@ -896,8 +737,8 @@
   (lsp-ui-sideline-enable t)
   (lsp-ui-sideline-show-hover nil)
   (lsp-ui-doc-position 'bottom)
-  (lsp-ui-doc-enable t)
-  (lsp-ui-doc-show t)
+  (lsp-ui-doc-enable nil)
+  (lsp-ui-doc-show nil)
   :bind (:map lsp-ui-mode-map ("C-c i" . lsp-ui-menu)))
 
 (use-package lsp-ui
@@ -1087,7 +928,7 @@
   (add-hook 'geiser-repl-mode-hook 'rainbow-delimiters-mode)
   (add-hook 'inferior-scheme-mode-hook 'rainbow-delimiters-mode))
 
-(use-package nix-mode :mode ("\\.nix\\'" "\\.nix.in\\'"))
+(use-package nix-ts-mode :mode ("\\.nix\\'" "\\.nix.in\\'"))
 
 (use-package nix-drv-mode :ensure nix-mode :mode "\\.drv\\'")
 
@@ -1105,6 +946,11 @@
   :bind (:map flycheck-mode-map
               ("M-n" . flycheck-next-error) ; optional but recommended error navigation
               ("M-p" . flycheck-previous-error)))
+
+(use-package flycheck-clang-tidy
+  :after flycheck
+  :hook
+  (flycheck-mode . flycheck-clang-tidy-setup))
 
 (use-package bash-ts-mode
   :ensure nil
@@ -1271,7 +1117,12 @@
   :init
   (setq yas-snippet-dir "~/.emacs.d/snippets")
   :config
-  (yas-global-mode +1))
+  (yas-global-mode +1)
+  (define-key yas-minor-mode-map (kbd "C-c y") 'yas-expand))
+
+(use-package yasnippet-snippets
+  :ensure t
+  :after yasnippet)
 
 (use-package 
   ripgrep 
@@ -1514,6 +1365,14 @@
   (("C-c w w" . org-web-tools-insert-link-for-url)))
 
 ;; end writing
+(use-package plantuml-mode
+  :init
+    (setq plantuml-default-exec-mode 'jar)
+    (setq plantuml-jar-path "/usr/share/plantuml/plantuml.jar")
+    (setq org-plantuml-jar-path (expand-file-name "/usr/share/plantuml/plantuml.jar"))
+    (setq org-startup-with-inline-images t)
+    (add-to-list 'org-src-lang-modes '("plantuml" . plantuml))
+    (org-babel-do-load-languages 'org-babel-load-languages '((plantuml . t))))
 
 ;;; My functions
 (defun remacs/pdf-toggle-dark-mode ()
@@ -1767,56 +1626,6 @@
   (set-selection-coding-system 'utf-8)
   (prefer-coding-system 'utf-8)
   (define-coding-system-alias 'UTF-8 'utf-8))
-
-;; --- Incrementally update TAGS when saving C/C++ files ---
-(defun remacs/find-project-root ()
-  "Find project root directory (by looking for TAGS or .git)."
-  (or (locate-dominating-file default-directory "TAGS")
-      (locate-dominating-file default-directory ".git")
-      default-directory))
-
-(defun remacs/update-etags-for-file ()
-  "Incrementally update TAGS for the current buffer’s file."
-  (when (and buffer-file-name
-             (derived-mode-p 'c-mode 'c++-mode))
-    (let* ((project-root (remacs/find-project-root))
-           (tag-file (expand-file-name "TAGS" project-root))
-           (cmd (format "etags -a -o %s %s"
-                        (shell-quote-argument tag-file)
-                        (shell-quote-argument buffer-file-name))))
-      (message "Updating TAGS incrementally for %s..." buffer-file-name)
-      (start-process-shell-command "etags-update" "*etags-output*" cmd)
-      (when (file-exists-p tag-file)
-        (visit-tags-table tag-file))
-      (message "TAGS updated for %s" buffer-file-name))))
-
-(defun remacs/setup-cpp-etags-auto-update ()
-  "Set up automatic incremental TAGS updates on save for C/C++."
-  (when (derived-mode-p 'c-mode 'c++-mode)
-    (add-hook 'after-save-hook #'remacs/update-etags-for-file nil t)))
-
-(add-hook 'c-mode-hook #'remacs/setup-cpp-etags-auto-update)
-(add-hook 'c++-mode-hook #'remacs/setup-cpp-etags-auto-update)
-
-(defun remacs/create-etags (dir)
-  "Generate TAGS file for all C/C++ files under DIR."
-  (interactive "DProject root directory: ")
-  (let* ((default-directory (file-name-as-directory dir))
-         (tag-file (expand-file-name "TAGS" default-directory))
-         (cmd (format "find %s -type f \\( -name \"*.cpp\" -o -name \"*.cxx\" -o -name \"*.cc\" -o -name \"*.c\" -o -name \"*.hpp\" -o -name \"*.hh\" -o -name \"*.h\" \\) -print | etags -o %s -"
-                      (shell-quote-argument default-directory)
-                      (shell-quote-argument tag-file))))
-    (message "Generating full TAGS in %s..." default-directory)
-    (start-process-shell-command "etags-gen" "*etags-output*" cmd)
-    (visit-tags-table tag-file)
-    (message "Full TAGS generated successfully at %s" tag-file)))
-
-
-;; (setq path-to-ctags "etags")
-;; (defun remacs/create-tags(dirname)
-;;   "Create tags file to a project"
-;;   (interactive "DDirectory: ")
-;;   (shell-command (format "find %s -type f -iname \"*.c\" -o -iname \"*.h\" -o -iname \"*.cpp\" -o -iname \"*.hpp\" -o -iname \"*.inc\" | xargs %s -a" (directory-file-name dirname) path-to-ctags)))
 
 (defun sim-vi-w (&optional arg)
   "Simulate Vi's \"w\" behavior."
