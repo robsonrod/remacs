@@ -264,11 +264,6 @@
   :bind (("C-s" . isearch-forward)
          ("C-r" . isearch-backward)))
 
-(use-package batppuccin
-  :ensure t
-  :config
-  (load-theme 'batppuccin-macchiato t))
-
 (use-package treesit-auto
   :ensure t
   :after emacs
@@ -485,8 +480,8 @@
 (use-package
   avy
   :bind
-  (("C-:" . avy-goto-char)
-   ("C-M-:" . avy-goto-char2))
+  (("M-g c" . avy-goto-char)
+   ("M-g w" . avy-goto-word-1))
   :config
   (setq avy-background t
         avy-timeout-seconds 0.2))
@@ -625,7 +620,7 @@
   (setq
    doom-themes-enable-bold t
    doom-themes-enable-italic t)
-  ;;(load-theme 'doom-dracula t)
+  (load-theme 'doom-gruvbox t)
   (doom-themes-org-config) (doom-themes-neotree-config))
 
 ;; Undo/redo framework
@@ -931,6 +926,12 @@
 (use-package nix-ts-mode :mode ("\\.nix\\'" "\\.nix.in\\'"))
 
 (use-package nix-drv-mode :ensure nix-mode :mode "\\.drv\\'")
+
+(use-package nixpkgs-fmt
+  :ensure t
+  :config
+  (add-hook 'nix-mode-hook 'nixpkgs-fmt-on-save-mode)
+  (add-hook 'nix-ts-mode-hook 'nixpkgs-fmt-on-save-mode))
 
 (use-package
   nix-shell
@@ -1348,9 +1349,9 @@
 
 (use-package elfeed
   :custom
-  (elfeed-db-directory
-   (expand-file-name "elfeed" user-emacs-directory))
+  (elfeed-db-directory (expand-file-name "elfeed" user-emacs-directory))
   (elfeed-show-entry-switch 'display-buffer)
+  (elfeed-search-filter "@2-months-ago ")
   :bind
   ("C-c w e" . elfeed))
 
